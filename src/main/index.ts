@@ -10,12 +10,15 @@ function createWindow(): void {
     height: 670,
     show: false,
     autoHideMenuBar: true,
+    fullscreenable: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
     }
   })
+
+  mainWindow.maximize()
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
@@ -51,6 +54,9 @@ app.whenReady().then(() => {
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
+  ipcMain.handle('open-external', async (_, url: string) => {
+    await shell.openExternal(url)
+  })
 
   createWindow()
 
