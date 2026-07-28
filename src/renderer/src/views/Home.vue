@@ -18,7 +18,7 @@ const activeSpaceMenu = ref<string | null>(null)
 const activeChatMenu = ref<number | null>(null)
 const userMenuRef = ref<HTMLElement | null>(null)
 const collapsedSpaces = reactive<Record<string, boolean>>({
-  KE-WORK工作台: false,
+  'KE-WORK工作台': false,
   研究助手: false
 })
 
@@ -187,15 +187,8 @@ const switchNav = (nav: NavKey): void => {
         <circle cx="29.5" cy="19" r="1.2" fill="#0e7490" />
       </svg>
       <button class="sidebar-collapse-btn" title="展开侧栏" @click="sidebarCollapsed = false">
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-        >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round">
           <rect x="3" y="3" width="18" height="18" rx="2" />
           <path d="M9 3v18" />
           <path d="M14 9l3 3-3 3" />
@@ -225,15 +218,8 @@ const switchNav = (nav: NavKey): void => {
             <p class="sidebar-version">v1.0.0</p>
           </div>
           <button class="sidebar-collapse-btn" title="收缩侧栏" @click="sidebarCollapsed = true">
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-            >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round">
               <rect x="3" y="3" width="18" height="18" rx="2" />
               <path d="M9 3v18" />
               <path d="M14 15l-3-3 3-3" />
@@ -242,15 +228,8 @@ const switchNav = (nav: NavKey): void => {
         </div>
         <!-- Search -->
         <div class="sidebar-search">
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-          >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.3-4.3" />
           </svg>
@@ -260,67 +239,30 @@ const switchNav = (nav: NavKey): void => {
 
       <!-- Navigation -->
       <nav class="sidebar-nav">
-        <button
-          :class="['nav-item', { 'nav-item--active': activeNav === '新建任务' }]"
-          @click="switchNav('新建任务')"
-        >
+        <button :class="['nav-item', { 'nav-item--active': activeNav === '新建任务' }]" @click="switchNav('新建任务')">
           <span class="nav-icon">
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-            >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round">
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
           </span>
           <span class="nav-label">新建任务</span>
         </button>
-        <button
-          v-for="item in navItems"
-          :key="item.label"
-          :class="['nav-item', { 'nav-item--active': activeNav === item.label }]"
-          @click="switchNav(item.label)"
-        >
+        <button v-for="item in navItems" :key="item.label"
+          :class="['nav-item', { 'nav-item--active': activeNav === item.label }]" @click="switchNav(item.label)">
           <span class="nav-icon">
-            <svg
-              v-if="item.icon === 'bot'"
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
+            <svg v-if="item.icon === 'bot'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2">
               <rect x="3" y="3" width="18" height="14" rx="3" />
               <path d="M8 21h8M12 17v4" />
             </svg>
-            <svg
-              v-else-if="item.icon === 'folder'"
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path
-                d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
-              />
+            <svg v-else-if="item.icon === 'folder'" width="15" height="15" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
             </svg>
-            <svg
-              v-else-if="item.icon === 'cpu'"
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
+            <svg v-else-if="item.icon === 'cpu'" width="15" height="15" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2">
               <rect x="4" y="4" width="16" height="16" rx="2" />
               <rect x="9" y="9" width="6" height="6" />
               <line x1="9" y1="1" x2="9" y2="4" />
@@ -332,29 +274,14 @@ const switchNav = (nav: NavKey): void => {
               <line x1="1" y1="9" x2="4" y2="9" />
               <line x1="1" y1="14" x2="4" y2="14" />
             </svg>
-            <svg
-              v-else-if="item.icon === 'workflow'"
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
+            <svg v-else-if="item.icon === 'workflow'" width="15" height="15" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2">
               <rect x="2" y="3" width="6" height="6" rx="1" />
               <rect x="9" y="2" width="6" height="8" rx="1" />
               <rect x="16" y="3" width="6" height="6" rx="1" />
               <path d="M5 9v4a2 2 0 0 0 2 2h3M12 6v2M19 9v4a2 2 0 0 1-2 2h-2" />
             </svg>
-            <svg
-              v-else
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
+            <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="1" />
               <circle cx="19" cy="12" r="1" />
               <circle cx="5" cy="12" r="1" />
@@ -370,16 +297,8 @@ const switchNav = (nav: NavKey): void => {
       <!-- Spaces -->
       <div class="sidebar-spaces">
         <button class="spaces-toggle" @click="spaceOpen = !spaceOpen">
-          <svg
-            :class="{ 'rotate-n90': !spaceOpen }"
-            width="11"
-            height="11"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-          >
+          <svg :class="{ 'rotate-n90': !spaceOpen }" width="11" height="11" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <polyline points="6 9 12 15 18 9" />
           </svg>
           <span>空间 ({{ spaces.length }})</span>
@@ -388,30 +307,12 @@ const switchNav = (nav: NavKey): void => {
           <div v-show="spaceOpen" class="spaces-list">
             <div v-for="[spaceName, chats] in spaces" :key="spaceName" class="space-group">
               <div class="space-header">
-                <svg
-                  v-if="spaceName === 'KE-WORK工作台'"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                >
-                  <path
-                    d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
-                  />
+                <svg v-if="spaceName === 'KE-WORK工作台'" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                 </svg>
-                <svg
-                  v-else
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                >
+                <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round">
                   <circle cx="18" cy="5" r="3" />
                   <circle cx="6" cy="12" r="3" />
                   <circle cx="18" cy="19" r="3" />
@@ -421,23 +322,10 @@ const switchNav = (nav: NavKey): void => {
                 <span>{{ spaceName }}</span>
                 <div class="space-header-right">
                   <div class="space-header-actions">
-                    <button
-                      class="space-header-btn space-header-menu"
-                      type="button"
-                      data-space-menu-trigger
-                      aria-label="更多"
-                      title="更多"
-                      @click.stop="toggleSpaceMenu(spaceName)"
-                    >
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                      >
+                    <button class="space-header-btn space-header-menu" type="button" data-space-menu-trigger
+                      aria-label="更多" title="更多" @click.stop="toggleSpaceMenu(spaceName)">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round">
                         <circle cx="12" cy="5" r="1" />
                         <circle cx="12" cy="12" r="1" />
                         <circle cx="12" cy="19" r="1" />
@@ -446,77 +334,37 @@ const switchNav = (nav: NavKey): void => {
                     <Transition name="dropdown">
                       <div v-if="activeSpaceMenu === spaceName" class="space-menu">
                         <button class="space-menu-item" type="button">
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                          >
-                            <path
-                              d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
-                            />
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                           </svg>
                           打开文件夹
                         </button>
                         <button class="space-menu-item space-menu-item--danger" type="button">
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                          >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round">
                             <polyline points="3 6 5 6 21 6" />
-                            <path
-                              d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                            />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                           </svg>
                           从列表中删除
                         </button>
                       </div>
                     </Transition>
-                    <button
-                      class="space-header-btn space-header-add"
-                      type="button"
-                      title="添加子项"
-                      @click.stop="handleAddSpaceItem(spaceName)"
-                    >
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                      >
+                    <button class="space-header-btn space-header-add" type="button" title="添加子项"
+                      @click.stop="handleAddSpaceItem(spaceName)">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round">
                         <line x1="12" y1="5" x2="12" y2="19" />
                         <line x1="5" y1="12" x2="19" y2="12" />
                       </svg>
                     </button>
                   </div>
-                  <button
-                    class="space-header-btn space-header-collapse"
-                    type="button"
+                  <button class="space-header-btn space-header-collapse" type="button"
                     :class="{ 'space-header-collapse--collapsed': collapsedSpaces[spaceName] }"
-                    :aria-expanded="!collapsedSpaces[spaceName]"
-                    title="折叠 / 展开"
-                    @click.stop="toggleSpaceCollapse(spaceName)"
-                  >
-                    <svg
-                      width="10"
-                      height="10"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                    >
+                    :aria-expanded="!collapsedSpaces[spaceName]" title="折叠 / 展开"
+                    @click.stop="toggleSpaceCollapse(spaceName)">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round">
                       <polyline points="6 9 12 15 18 9" />
                     </svg>
                   </button>
@@ -530,21 +378,10 @@ const switchNav = (nav: NavKey): void => {
                     </div>
                     <div class="space-chat-actions">
                       <div class="chat-menu-wrapper">
-                        <button
-                          class="space-chat-action-btn"
-                          data-chat-menu-trigger
-                          title="更多"
-                          @click.stop="toggleChatMenu(chat.id)"
-                        >
-                          <svg
-                            width="12"
-                            height="12"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                          >
+                        <button class="space-chat-action-btn" data-chat-menu-trigger title="更多"
+                          @click.stop="toggleChatMenu(chat.id)">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round">
                             <circle cx="12" cy="5" r="1" />
                             <circle cx="12" cy="12" r="1" />
                             <circle cx="12" cy="19" r="1" />
@@ -553,93 +390,46 @@ const switchNav = (nav: NavKey): void => {
                         <Transition name="dropdown">
                           <div v-if="activeChatMenu === chat.id" class="chat-menu">
                             <button class="chat-menu-item" type="button">
-                              <svg
-                                width="14"
-                                height="14"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                              >
-                                <path
-                                  d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
-                                />
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                               </svg>
                               打开文件夹
                             </button>
                             <button class="chat-menu-item" type="button">
-                              <svg
-                                width="14"
-                                height="14"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                              >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round">
                                 <polyline points="1 4 1 10 7 10" />
                                 <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
                               </svg>
                               重命名
                             </button>
                             <button class="chat-menu-item chat-menu-item--danger" type="button">
-                              <svg
-                                width="14"
-                                height="14"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                              >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round">
                                 <polyline points="3 6 5 6 21 6" />
                                 <path
-                                  d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                                />
+                                  d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                               </svg>
                               删除任务
                             </button>
                           </div>
                         </Transition>
                       </div>
-                      <button
-                        class="space-chat-action-btn"
-                        title="归档"
-                        @click.stop="handleArchiveChat(chat.id)"
-                      >
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                        >
+                      <button class="space-chat-action-btn" title="归档" @click.stop="handleArchiveChat(chat.id)">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="2" stroke-linecap="round">
                           <polyline points="21 8 21 21 3 21 3 8" />
                           <rect x="1" y="3" width="22" height="5" />
                           <line x1="10" y1="12" x2="14" y2="12" />
                         </svg>
                       </button>
-                      <button
-                        class="space-chat-action-btn"
-                        title="置顶"
-                        @click.stop="handlePinChat(chat.id)"
-                      >
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                        >
+                      <button class="space-chat-action-btn" title="置顶" @click.stop="handlePinChat(chat.id)">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="2" stroke-linecap="round">
                           <line x1="12" y1="17" x2="12" y2="22" />
                           <path
-                            d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"
-                          />
+                            d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
                         </svg>
                       </button>
                     </div>
@@ -656,23 +446,12 @@ const switchNav = (nav: NavKey): void => {
       <div class="sidebar-bottom">
         <!-- User bar -->
         <div class="user-bar">
-          <button
-            class="user-avatar-btn"
-            data-usermenu-trigger="true"
-            @click="userMenuOpen = !userMenuOpen"
-          >
+          <button class="user-avatar-btn" data-usermenu-trigger="true" @click="userMenuOpen = !userMenuOpen">
             <div class="user-avatar">鸾</div>
             <span class="user-name">KE-WORK用户</span>
           </button>
           <button class="user-icon-btn">
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
@@ -687,15 +466,8 @@ const switchNav = (nav: NavKey): void => {
               <div class="menu-avatar">鸾</div>
               <span class="menu-username">KE-WORK用户</span>
               <button class="menu-copy-btn">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round">
                   <rect x="9" y="9" width="13" height="13" rx="2" />
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                 </svg>
@@ -704,46 +476,23 @@ const switchNav = (nav: NavKey): void => {
             <!-- Menu items -->
             <div class="menu-section">
               <button class="menu-item">
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="12" cy="12" r="3" />
                   <path
-                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
-                  />
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
                 </svg>
                 <span>设置</span>
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
               </button>
               <!-- Theme toggle -->
               <div class="menu-item-row">
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round">
                   <circle cx="12" cy="12" r="5" />
                   <path
-                    d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
-                  />
+                    d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
                 </svg>
                 <span>外观</span>
                 <div class="theme-toggle">
@@ -752,69 +501,34 @@ const switchNav = (nav: NavKey): void => {
                 </div>
               </div>
               <button class="menu-item">
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round">
                   <circle cx="12" cy="12" r="10" />
                   <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
                   <path d="M12 17h.01" />
                 </svg>
                 <span>帮助与反馈</span>
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
               </button>
               <button class="menu-item">
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                   <polyline points="17 8 12 3 7 8" />
                   <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
                 <span>检查更新</span>
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
               </button>
             </div>
             <!-- Logout -->
             <button class="menu-logout" @click="handleLogout">
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-              >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                 <polyline points="16 17 21 12 16 7" />
                 <line x1="21" y1="12" x2="9" y2="12" />
@@ -837,12 +551,9 @@ const switchNav = (nav: NavKey): void => {
 
             <!-- Category pills -->
             <div class="category-pills">
-              <button
-                v-for="cat in categories"
-                :key="cat.key"
+              <button v-for="cat in categories" :key="cat.key"
                 :class="['category-pill', { 'category-pill--active': category === cat.key }]"
-                @click="category = cat.key"
-              >
+                @click="category = cat.key">
                 <span>{{ cat.icon }}</span>
                 {{ cat.label }}
               </button>
@@ -851,78 +562,36 @@ const switchNav = (nav: NavKey): void => {
             <!-- Quick chips + mascot -->
             <div class="chips-row">
               <button class="chips-scroll-btn chips-scroll-btn--left" @click="scrollChips('left')">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="15 18 9 12 15 6" />
                 </svg>
               </button>
               <div ref="chipsScrollRef" class="chips-scroll">
                 <button v-for="chip in quickChips" :key="chip.label" class="quick-chip">
                   <span class="chip-icon">
-                    <svg
-                      v-if="chip.icon === 'doc'"
-                      width="13"
-                      height="13"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
+                    <svg v-if="chip.icon === 'doc'" width="13" height="13" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" stroke-width="2">
                       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                       <polyline points="14 2 14 8 20 8" />
                     </svg>
-                    <svg
-                      v-else-if="chip.icon === 'chart'"
-                      width="13"
-                      height="13"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
+                    <svg v-else-if="chip.icon === 'chart'" width="13" height="13" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" stroke-width="2">
                       <line x1="18" y1="20" x2="18" y2="10" />
                       <line x1="12" y1="20" x2="12" y2="4" />
                       <line x1="6" y1="20" x2="6" y2="14" />
                     </svg>
-                    <svg
-                      v-else-if="chip.icon === 'research'"
-                      width="13"
-                      height="13"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
+                    <svg v-else-if="chip.icon === 'research'" width="13" height="13" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" stroke-width="2">
                       <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
                       <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
                     </svg>
-                    <svg
-                      v-else-if="chip.icon === 'video'"
-                      width="13"
-                      height="13"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
+                    <svg v-else-if="chip.icon === 'video'" width="13" height="13" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" stroke-width="2">
                       <polygon points="23 7 16 12 23 17 23 7" />
                       <rect x="1" y="5" width="15" height="14" rx="2" />
                     </svg>
-                    <svg
-                      v-else-if="chip.icon === 'slides'"
-                      width="13"
-                      height="13"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
+                    <svg v-else-if="chip.icon === 'slides'" width="13" height="13" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" stroke-width="2">
                       <rect x="2" y="3" width="20" height="14" rx="2" />
                       <line x1="8" y1="21" x2="16" y2="21" />
                       <line x1="12" y1="17" x2="12" y2="21" />
@@ -931,18 +600,8 @@ const switchNav = (nav: NavKey): void => {
                   {{ chip.label }}
                 </button>
               </div>
-              <button
-                class="chips-scroll-btn chips-scroll-btn--right"
-                @click="scrollChips('right')"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
+              <button class="chips-scroll-btn chips-scroll-btn--right" @click="scrollChips('right')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="9 6 15 12 9 18" />
                 </svg>
               </button>
@@ -976,49 +635,13 @@ const switchNav = (nav: NavKey): void => {
                 <circle cx="54" cy="29" r="4" fill="#1e293b" />
                 <circle cx="35.5" cy="27.5" r="1.5" fill="white" />
                 <circle cx="55.5" cy="27.5" r="1.5" fill="white" />
-                <rect
-                  x="27"
-                  y="23"
-                  width="14"
-                  height="12"
-                  rx="6"
-                  fill="none"
-                  stroke="url(#rmg2)"
-                  stroke-width="1.5"
-                />
-                <rect
-                  x="47"
-                  y="23"
-                  width="14"
-                  height="12"
-                  rx="6"
-                  fill="none"
-                  stroke="url(#rmg2)"
-                  stroke-width="1.5"
-                />
+                <rect x="27" y="23" width="14" height="12" rx="6" fill="none" stroke="url(#rmg2)" stroke-width="1.5" />
+                <rect x="47" y="23" width="14" height="12" rx="6" fill="none" stroke="url(#rmg2)" stroke-width="1.5" />
                 <ellipse cx="44" cy="37" rx="3" ry="1.5" fill="#94a3b8" />
-                <path
-                  d="M40 40 Q44 43 48 40"
-                  stroke="#94a3b8"
-                  stroke-width="1.2"
-                  stroke-linecap="round"
-                  fill="none"
-                />
-                <path
-                  d="M16 27 Q14 20 20 16"
-                  stroke="#0891b2"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                  fill="none"
-                />
+                <path d="M40 40 Q44 43 48 40" stroke="#94a3b8" stroke-width="1.2" stroke-linecap="round" fill="none" />
+                <path d="M16 27 Q14 20 20 16" stroke="#0891b2" stroke-width="3" stroke-linecap="round" fill="none" />
                 <rect x="12" y="26" width="8" height="10" rx="4" fill="url(#rmg2)" />
-                <path
-                  d="M72 27 Q74 20 68 16"
-                  stroke="#0891b2"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                  fill="none"
-                />
+                <path d="M72 27 Q74 20 68 16" stroke="#0891b2" stroke-width="3" stroke-linecap="round" fill="none" />
                 <rect x="68" y="26" width="8" height="10" rx="4" fill="url(#rmg2)" />
                 <rect x="10" y="48" width="14" height="18" rx="7" fill="url(#rmg1)" />
                 <rect x="64" y="48" width="14" height="18" rx="7" fill="url(#rmg1)" />
@@ -1029,23 +652,11 @@ const switchNav = (nav: NavKey): void => {
 
             <!-- Input card -->
             <div class="input-card">
-              <textarea
-                v-model="taskInput"
-                class="task-textarea"
-                placeholder="今天帮你做些什么？  @ 引用对话文件，/ 调用技能与指令"
-                rows="3"
-                @keydown.enter.exact.prevent="sendMessage"
-              ></textarea>
+              <textarea v-model="taskInput" class="task-textarea" placeholder="今天帮你做些什么？  @ 引用对话文件，/ 调用技能与指令" rows="3"
+                @keydown.enter.exact.prevent="sendMessage"></textarea>
               <div class="input-toolbar">
                 <button class="toolbar-btn">
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="12" y1="5" x2="12" y2="19" />
                     <line x1="5" y1="12" x2="19" y2="12" />
                   </svg>
@@ -1062,45 +673,20 @@ const switchNav = (nav: NavKey): void => {
                 <!-- Model selector -->
                 <div class="model-selector">
                   <button class="model-btn" @click="modelOpen = !modelOpen">
-                    <svg
-                      width="11"
-                      height="11"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
                     </svg>
                     {{ model }}
-                    <svg
-                      width="10"
-                      height="10"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <polyline points="6 9 12 15 18 9" />
                     </svg>
                   </button>
                   <Transition name="dropdown">
                     <div v-if="modelOpen" class="model-dropdown">
-                      <button
-                        v-for="opt in modelOptions"
-                        :key="opt"
-                        :class="['model-option', { 'model-option--active': model === opt }]"
-                        @click="selectModel(opt)"
-                      >
-                        <svg
-                          v-if="model === opt"
-                          width="10"
-                          height="10"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="3"
-                        >
+                      <button v-for="opt in modelOptions" :key="opt"
+                        :class="['model-option', { 'model-option--active': model === opt }]" @click="selectModel(opt)">
+                        <svg v-if="model === opt" width="10" height="10" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" stroke-width="3">
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
                         <span v-else class="model-option-gap"></span>
@@ -1110,33 +696,15 @@ const switchNav = (nav: NavKey): void => {
                   </Transition>
                 </div>
                 <button class="toolbar-btn">
-                  <svg
-                    width="15"
-                    height="15"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
                     <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                     <line x1="12" y1="19" x2="12" y2="23" />
                     <line x1="8" y1="23" x2="16" y2="23" />
                   </svg>
                 </button>
-                <button
-                  class="send-btn"
-                  :class="{ 'send-btn--active': taskInput.trim() }"
-                  @click="sendMessage"
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                  >
+                <button class="send-btn" :class="{ 'send-btn--active': taskInput.trim() }" @click="sendMessage">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                     <line x1="22" y1="2" x2="11" y2="13" />
                     <polygon points="22 2 15 22 11 13 2 9 22 2" />
                   </svg>
@@ -1144,51 +712,21 @@ const switchNav = (nav: NavKey): void => {
               </div>
               <div class="input-footer">
                 <button class="footer-action">
-                  <svg
-                    width="11"
-                    height="11"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path
-                      d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
-                    />
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                   </svg>
                   选择工作空间
-                  <svg
-                    width="9"
-                    height="9"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="6 9 12 15 18 9" />
                   </svg>
                 </button>
                 <button class="footer-action">
-                  <svg
-                    width="11"
-                    height="11"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="3" y="11" width="18" height="11" rx="2" />
                     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                   </svg>
                   默认权限
-                  <svg
-                    width="9"
-                    height="9"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="6 9 12 15 18 9" />
                   </svg>
                 </button>
@@ -1199,11 +737,8 @@ const switchNav = (nav: NavKey): void => {
           <!-- Chat state -->
           <div v-else class="chat-area">
             <div class="chat-messages">
-              <div
-                v-for="(msg, i) in messages"
-                :key="i"
-                :class="['chat-bubble-row', { 'chat-bubble-row--user': msg.role === 'user' }]"
-              >
+              <div v-for="(msg, i) in messages" :key="i"
+                :class="['chat-bubble-row', { 'chat-bubble-row--user': msg.role === 'user' }]">
                 <div v-if="msg.role === 'ai'" class="chat-avatar chat-avatar--ai">
                   <svg width="20" height="20" viewBox="0 0 64 64" fill="none">
                     <ellipse cx="32" cy="38" rx="12" ry="14" fill="#0891b2" />
@@ -1238,56 +773,27 @@ const switchNav = (nav: NavKey): void => {
             <!-- Compact input -->
             <div class="chat-input-bar">
               <div class="chat-input-card">
-                <textarea
-                  v-model="taskInput"
-                  class="task-textarea task-textarea--compact"
-                  placeholder="继续输入…"
-                  rows="2"
-                  @keydown.enter.exact.prevent="sendMessage"
-                ></textarea>
+                <textarea v-model="taskInput" class="task-textarea task-textarea--compact" placeholder="继续输入…" rows="2"
+                  @keydown.enter.exact.prevent="sendMessage"></textarea>
                 <div class="input-toolbar input-toolbar--compact">
                   <button class="toolbar-btn">
-                    <svg
-                      width="15"
-                      height="15"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <line x1="12" y1="5" x2="12" y2="19" />
                       <line x1="5" y1="12" x2="19" y2="12" />
                     </svg>
                   </button>
                   <div class="toolbar-spacer"></div>
                   <button class="toolbar-btn">
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
                       <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                       <line x1="12" y1="19" x2="12" y2="23" />
                       <line x1="8" y1="23" x2="16" y2="23" />
                     </svg>
                   </button>
-                  <button
-                    class="send-btn"
-                    :class="{ 'send-btn--active': taskInput.trim() }"
-                    @click="sendMessage"
-                  >
-                    <svg
-                      width="13"
-                      height="13"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2.5"
-                    >
+                  <button class="send-btn" :class="{ 'send-btn--active': taskInput.trim() }" @click="sendMessage">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      stroke-width="2.5">
                       <line x1="22" y1="2" x2="11" y2="13" />
                       <polygon points="22 2 15 22 11 13 2 9 22 2" />
                     </svg>
@@ -1305,15 +811,8 @@ const switchNav = (nav: NavKey): void => {
         <AutomationPage v-else-if="activeNav === '自动化'" key="automation" />
         <div v-else key="placeholder" class="placeholder-page">
           <div class="placeholder-icon">
-            <svg
-              width="48"
-              height="48"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1"
-              stroke-linecap="round"
-            >
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"
+              stroke-linecap="round">
               <circle cx="12" cy="12" r="10" />
               <path d="M8 14s1.5 2 4 2 4-2 4-2" />
               <line x1="9" y1="9" x2="9.01" y2="9" />
@@ -2136,17 +1635,17 @@ const switchNav = (nav: NavKey): void => {
   background: rgba(8, 145, 178, 0.04);
 }
 
-.menu-item > svg:first-child {
+.menu-item>svg:first-child {
   color: #6b7f95;
   flex-shrink: 0;
 }
 
-.menu-item > span {
+.menu-item>span {
   flex: 1;
   font-weight: 500;
 }
 
-.menu-item > svg:last-child {
+.menu-item>svg:last-child {
   color: #d1d5db;
   flex-shrink: 0;
 }
@@ -2159,12 +1658,12 @@ const switchNav = (nav: NavKey): void => {
   font-size: 13px;
 }
 
-.menu-item-row > svg:first-child {
+.menu-item-row>svg:first-child {
   color: #6b7f95;
   flex-shrink: 0;
 }
 
-.menu-item-row > span {
+.menu-item-row>span {
   flex: 1;
   font-weight: 500;
   color: #1a2332;
@@ -2731,6 +2230,7 @@ const switchNav = (nav: NavKey): void => {
 }
 
 @keyframes dotBounce {
+
   0%,
   100% {
     transform: translateY(0);

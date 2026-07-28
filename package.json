@@ -23,8 +23,11 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@langchain/core": "^1.2.3",
     "axios": "^1.18.1",
+    "deepagents": "^1.11.1",
     "electron-updater": "^6.3.9",
+    "langchain": "^1.5.4",
     "pinia": "^4.0.2",
     "vue-router": "^5.2.0"
   },
