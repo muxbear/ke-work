@@ -1873,7 +1873,7 @@ const switchNav = (nav: NavKey): void => {
   gap: 8px;
   width: 100%;
   max-width: 720px;
-  margin-bottom: 28px;
+  margin-bottom: -10px;
 }
 
 .chips-scroll-btn {
