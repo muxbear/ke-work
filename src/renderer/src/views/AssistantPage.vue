@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
 
 // ── Types ──
@@ -22,7 +22,7 @@ interface ChatMessage {
 const assistants: Assistant[] = [
   {
     id: 'qingluan',
-    name: '青鸾助手',
+    name: 'KE-WORK助手',
     desc: '全能 AI 工作助手，支持多场景任务调度与智能对话',
     tags: ['通用', '已部署'],
     color: 'linear-gradient(135deg, #0891b2, #0e7490)',

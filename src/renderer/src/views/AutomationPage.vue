@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref } from 'vue'
 
 type Tab = 'tasks' | 'logs'
@@ -68,7 +68,7 @@ const addTask = (tpl: typeof automationTemplates[0]) => {
               </svg>
             </div>
             <p class="empty-title">开启你的第一个自动化任务吧</p>
-            <p class="empty-desc">从模版选择或自定义定时任务，让青鸾自动帮你完成重复工作</p>
+            <p class="empty-desc">从模版选择或自定义定时任务，让KE-WORK自动帮你完成重复工作</p>
             <button class="auto-create-btn" @click="showAdd = true">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               添加自动化
@@ -170,7 +170,7 @@ const addTask = (tpl: typeof automationTemplates[0]) => {
             <label class="modal-label">任务名称</label>
             <input type="text" placeholder="例如：每日行业快报推送" class="modal-input" />
             <label class="modal-label">任务描述 / 提示词</label>
-            <textarea rows="3" placeholder="描述你希望青鸾每次执行的内容…" class="modal-textarea"></textarea>
+            <textarea rows="3" placeholder="描述你希望KE-WORK每次执行的内容…" class="modal-textarea"></textarea>
             <div class="modal-row">
               <div>
                 <label class="modal-label">执行频率</label>

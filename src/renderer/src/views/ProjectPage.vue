@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref } from 'vue'
 
 const search = ref('')
@@ -7,7 +7,7 @@ const hoveredId = ref<number | null>(null)
 
 const myProjects = [
   { id: 1, name: '项目新手指引', time: '添加于 6 天前', color: '#0891b2' },
-  { id: 2, name: '青鸾设计系统 v2', time: '添加于 2 天前', color: '#8b5cf6' }
+  { id: 2, name: 'KE-WORK设计系统 v2', time: '添加于 2 天前', color: '#8b5cf6' }
 ]
 
 const templates = [

@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../store/user'
@@ -18,7 +18,7 @@ const activeSpaceMenu = ref<string | null>(null)
 const activeChatMenu = ref<number | null>(null)
 const userMenuRef = ref<HTMLElement | null>(null)
 const collapsedSpaces = reactive<Record<string, boolean>>({
-  青鸾工作台: false,
+  KE-WORK工作台: false,
   研究助手: false
 })
 
@@ -88,8 +88,8 @@ const navItems = [
 ]
 
 const recentChats = [
-  { id: 1, space: '青鸾工作台', title: '继续 ardot 设计核心与系统…', time: '4天前', active: true },
-  { id: 2, space: '青鸾工作台', title: '生成项目功能介绍', time: '6天前', active: false },
+  { id: 1, space: 'KE-WORK工作台', title: '继续 ardot 设计核心与系统…', time: '4天前', active: true },
+  { id: 2, space: 'KE-WORK工作台', title: '生成项目功能介绍', time: '6天前', active: false },
   { id: 3, space: '研究助手', title: '市场调研数据分析报告', time: '昨天', active: false }
 ]
 
@@ -221,7 +221,7 @@ const switchNav = (nav: NavKey): void => {
             <circle cx="29.5" cy="19" r="1.2" fill="#0e7490" />
           </svg>
           <div class="sidebar-brand-text">
-            <p class="sidebar-title">青鸾</p>
+            <p class="sidebar-title">KE-WORK</p>
             <p class="sidebar-version">v1.0.0</p>
           </div>
           <button class="sidebar-collapse-btn" title="收缩侧栏" @click="sidebarCollapsed = true">
@@ -389,7 +389,7 @@ const switchNav = (nav: NavKey): void => {
             <div v-for="[spaceName, chats] in spaces" :key="spaceName" class="space-group">
               <div class="space-header">
                 <svg
-                  v-if="spaceName === '青鸾工作台'"
+                  v-if="spaceName === 'KE-WORK工作台'"
                   width="12"
                   height="12"
                   viewBox="0 0 24 24"
@@ -662,7 +662,7 @@ const switchNav = (nav: NavKey): void => {
             @click="userMenuOpen = !userMenuOpen"
           >
             <div class="user-avatar">鸾</div>
-            <span class="user-name">青鸾用户</span>
+            <span class="user-name">KE-WORK用户</span>
           </button>
           <button class="user-icon-btn">
             <svg
@@ -685,7 +685,7 @@ const switchNav = (nav: NavKey): void => {
             <!-- User header -->
             <div class="menu-header">
               <div class="menu-avatar">鸾</div>
-              <span class="menu-username">青鸾用户</span>
+              <span class="menu-username">KE-WORK用户</span>
               <button class="menu-copy-btn">
                 <svg
                   width="14"
@@ -833,7 +833,7 @@ const switchNav = (nav: NavKey): void => {
         <div v-if="activeNav === '新建任务'" key="newtask" class="new-task-page">
           <!-- Welcome state -->
           <div v-if="messages.length === 0" class="welcome-area">
-            <h2 class="welcome-heading">青鸾，<span class="welcome-highlight">我帮你</span></h2>
+            <h2 class="welcome-heading">KE-WORK，<span class="welcome-highlight">我帮你</span></h2>
 
             <!-- Category pills -->
             <div class="category-pills">

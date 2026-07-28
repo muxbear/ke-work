@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, ref } from 'vue'
 
 type PageTab = 'expert' | 'skill' | 'connector'
@@ -145,7 +145,7 @@ const filteredExperts = computed(() =>
         <div v-else-if="pageTab === 'skill'" key="skill">
           <div class="sec-intro">
             <h2 class="sec-title">技能广场</h2>
-            <p class="sec-desc">为青鸾扩展专项能力，一键调用即可赋能任意对话</p>
+            <p class="sec-desc">为KE-WORK扩展专项能力，一键调用即可赋能任意对话</p>
           </div>
           <div class="skill-grid">
             <div v-for="skill in skillItems.filter(s => s.name.includes(search) || s.desc.includes(search))" :key="skill.id" class="skill-card">
@@ -168,7 +168,7 @@ const filteredExperts = computed(() =>
         <div v-else key="connector">
           <div class="sec-intro">
             <h2 class="sec-title">连接器</h2>
-            <p class="sec-desc">将外部服务接入青鸾，让 AI 直接读写你的数据与工具</p>
+            <p class="sec-desc">将外部服务接入KE-WORK，让 AI 直接读写你的数据与工具</p>
           </div>
           <div class="skill-grid">
             <div v-for="conn in connectorItems.filter(c => c.name.includes(search) || c.desc.includes(search))" :key="conn.id" class="skill-card" :class="{ 'skill-card--connected': conn.connected }">

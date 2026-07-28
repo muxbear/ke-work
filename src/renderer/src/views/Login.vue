@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../store/user'
@@ -218,8 +218,8 @@ const handleWechatLogin = async (): Promise<void> => {
           <circle cx="29.5" cy="19" r="1.2" fill="#0e7490" />
           <path d="M32 25 L29 28 L35 28Z" fill="#f0fdff" />
         </svg>
-        <h1 class="title">青鸾</h1>
-        <p class="subtitle">QingLuan Desktop · 欢迎回来</p>
+        <h1 class="title">KE-WORK</h1>
+        <p class="subtitle">Ke-Work Desktop · 欢迎回来</p>
       </div>
 
       <!-- Tabs -->
