@@ -40,6 +40,10 @@ const handleDocumentClick = (e: MouseEvent): void => {
   if (!target.closest('[data-chat-menu-trigger]') && !target.closest('.chat-menu')) {
     activeChatMenu.value = null
   }
+
+  if (!target.closest('[data-plus-menu-trigger]') && !target.closest('.plus-menu')) {
+    showInputPlusMenu.value = false
+  }
 }
 
 onMounted(() => {
@@ -107,6 +111,7 @@ const category = ref('work')
 const taskInput = ref('')
 const model = ref('Auto')
 const modelOpen = ref(false)
+const showInputPlusMenu = ref(false)
 const messages = ref<{ role: 'user' | 'ai'; content: string }[]>([])
 const thinking = ref(false)
 const chipsScrollRef = ref<HTMLElement | null>(null)
@@ -655,7 +660,7 @@ const switchNav = (nav: NavKey): void => {
               <textarea v-model="taskInput" class="task-textarea" placeholder="今天帮你做些什么？  @ 引用对话文件，/ 调用技能与指令" rows="3"
                 @keydown.enter.exact.prevent="sendMessage"></textarea>
               <div class="input-toolbar">
-                <button class="toolbar-btn">
+                <button class="toolbar-btn" data-plus-menu-trigger @click="showInputPlusMenu = !showInputPlusMenu">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="12" y1="5" x2="12" y2="19" />
                     <line x1="5" y1="12" x2="19" y2="12" />
@@ -709,7 +714,75 @@ const switchNav = (nav: NavKey): void => {
                     <polygon points="22 2 15 22 11 13 2 9 22 2" />
                   </svg>
                 </button>
+                <!-- Plus Menu -->
+                <Transition name="plus-menu-slide">
+                  <div v-if="showInputPlusMenu" class="plus-menu">
+                    <button class="plus-menu-item" @click="showInputPlusMenu = false">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                      </svg>
+                      <span>添加文件</span>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        class="plus-menu-chevron">
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                    </button>
+                    <button class="plus-menu-item" @click="showInputPlusMenu = false">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                      </svg>
+                      <span>模式</span>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        class="plus-menu-chevron">
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                    </button>
+                    <button class="plus-menu-item" @click="showInputPlusMenu = false">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2">
+                        <polygon
+                          points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                      </svg>
+                      <span>专家</span>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        class="plus-menu-chevron">
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                    </button>
+                    <button class="plus-menu-item" @click="showInputPlusMenu = false">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2">
+                        <circle cx="12" cy="12" r="3" />
+                        <path
+                          d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                      </svg>
+                      <span>技能</span>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        class="plus-menu-chevron">
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                    </button>
+                    <button class="plus-menu-item" @click="showInputPlusMenu = false">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2">
+                        <circle cx="18" cy="5" r="3" />
+                        <circle cx="6" cy="12" r="3" />
+                        <circle cx="18" cy="19" r="3" />
+                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                      </svg>
+                      <span>连接器</span>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        class="plus-menu-chevron">
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                    </button>
+                  </div>
+                </Transition>
               </div>
+
               <div class="input-footer">
                 <button class="footer-action">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -776,7 +849,7 @@ const switchNav = (nav: NavKey): void => {
                 <textarea v-model="taskInput" class="task-textarea task-textarea--compact" placeholder="继续输入…" rows="2"
                   @keydown.enter.exact.prevent="sendMessage"></textarea>
                 <div class="input-toolbar input-toolbar--compact">
-                  <button class="toolbar-btn">
+                  <button class="toolbar-btn" data-plus-menu-trigger @click="showInputPlusMenu = !showInputPlusMenu">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <line x1="12" y1="5" x2="12" y2="19" />
                       <line x1="5" y1="12" x2="19" y2="12" />
@@ -798,12 +871,78 @@ const switchNav = (nav: NavKey): void => {
                       <polygon points="22 2 15 22 11 13 2 9 22 2" />
                     </svg>
                   </button>
+                  <!-- Plus Menu -->
+                  <Transition name="plus-menu-slide">
+                    <div v-if="showInputPlusMenu" class="plus-menu plus-menu--compact">
+                      <button class="plus-menu-item" @click="showInputPlusMenu = false">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="2">
+                          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                        </svg>
+                        <span>添加文件</span>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="2" class="plus-menu-chevron">
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                      </button>
+                      <button class="plus-menu-item" @click="showInputPlusMenu = false">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="2">
+                          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                        </svg>
+                        <span>模式</span>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="2" class="plus-menu-chevron">
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                      </button>
+                      <button class="plus-menu-item" @click="showInputPlusMenu = false">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="2">
+                          <polygon
+                            points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                        </svg>
+                        <span>专家</span>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="2" class="plus-menu-chevron">
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                      </button>
+                      <button class="plus-menu-item" @click="showInputPlusMenu = false">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="2">
+                          <circle cx="12" cy="12" r="3" />
+                          <path
+                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                        </svg>
+                        <span>技能</span>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="2" class="plus-menu-chevron">
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                      </button>
+                      <button class="plus-menu-item" @click="showInputPlusMenu = false">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="2">
+                          <circle cx="18" cy="5" r="3" />
+                          <circle cx="6" cy="12" r="3" />
+                          <circle cx="18" cy="19" r="3" />
+                          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                        </svg>
+                        <span>连接器</span>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          stroke-width="2" class="plus-menu-chevron">
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                      </button>
+                    </div>
+                  </Transition>
                 </div>
               </div>
             </div>
           </div>
         </div>
-
         <!-- ── Page components ── -->
         <AssistantPage v-else-if="activeNav === '助理'" key="assistant" />
         <ProjectPage v-else-if="activeNav === '项目'" key="project" />
@@ -1947,13 +2086,13 @@ const switchNav = (nav: NavKey): void => {
 
 /* Input card */
 .input-card {
+  position: relative;
   width: 100%;
   max-width: 720px;
   border-radius: 16px;
   border: 1.5px solid rgba(8, 145, 178, 0.2);
   box-shadow: 0 4px 24px rgba(8, 145, 178, 0.08);
   background: #ffffff;
-  overflow: hidden;
 }
 
 .task-textarea {
@@ -1979,6 +2118,7 @@ const switchNav = (nav: NavKey): void => {
 
 /* Input toolbar */
 .input-toolbar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -2139,6 +2279,84 @@ const switchNav = (nav: NavKey): void => {
   background: rgba(8, 145, 178, 0.06);
 }
 
+/* Plus Menu */
+.plus-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 4px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.10), 0 4px 20px rgba(0, 0, 0, 0.08);
+  padding: 4px;
+  min-width: 180px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.plus-menu--compact {
+  left: 0;
+  bottom: calc(100% + 2px);
+}
+
+.plus-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 7px;
+  color: #1e293b;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.plus-menu-item:hover {
+  background: #f1f5f9;
+}
+
+.plus-menu-item svg:first-child {
+  flex-shrink: 0;
+  color: #64748b;
+}
+
+.plus-menu-item span {
+  flex: 1;
+  text-align: left;
+}
+
+.plus-menu-chevron {
+  flex-shrink: 0;
+  color: #94a3b8;
+}
+
+/* Plus-menu transition */
+.plus-menu-slide-enter-active {
+  transition: all 0.2s ease-out;
+}
+
+.plus-menu-slide-leave-active {
+  transition: all 0.15s ease-in;
+}
+
+.plus-menu-slide-enter-from {
+  opacity: 0;
+  transform: translateY(8px) scale(0.96);
+}
+
+.plus-menu-slide-leave-to {
+  opacity: 0;
+  transform: translateY(6px) scale(0.97);
+}
+
+
 /* ═══════════════════════════════════════════════════════════════════════════
    Chat State
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -2247,11 +2465,11 @@ const switchNav = (nav: NavKey): void => {
 }
 
 .chat-input-card {
+  position: relative;
   border-radius: 16px;
   border: 1.5px solid rgba(8, 145, 178, 0.2);
   box-shadow: 0 2px 12px rgba(8, 145, 178, 0.06);
   background: #ffffff;
-  overflow: hidden;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

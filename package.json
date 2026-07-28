@@ -24,6 +24,8 @@
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@langchain/core": "^1.2.3",
+    "@langchain/deepseek": "^1.1.5",
+    "@langchain/openai": "^1.5.5",
     "axios": "^1.18.1",
     "deepagents": "^1.11.1",
     "electron-updater": "^6.3.9",
