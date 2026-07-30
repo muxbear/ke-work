@@ -1,6 +1,10 @@
+docs
 node_modules
 dist
 out
+.claude
+.playwright-mcp
+.vscode
 .DS_Store
 .eslintcache
 *.log*

@@ -1,9 +1,14 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { invokeSendMessage } from './agent/service'
+
 import icon from '../../resources/icon.png?asset'
 
 import 'dotenv/config'
+
+// 取消控制器映射（按窗口 ID）
+const abortControllers = new Map<number, AbortController>()
 
 function createWindow(): void {
   // Create the browser window.
@@ -54,10 +59,44 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
   ipcMain.handle('open-external', async (_, url: string) => {
     await shell.openExternal(url)
+  })
+
+  // Agent message handler
+  ipcMain.handle(
+    'agent:send',
+    async (event, messages: Array<{ role: string; content: string }>) => {
+      console.log('[main] agent:send handler, messages count:', messages?.length)
+      const win = BrowserWindow.fromWebContents(event.sender)
+      if (!win) {
+        console.error('[main] No window found for event.sender')
+        throw new Error('No window found')
+      }
+
+      const controller = new AbortController()
+      abortControllers.set(win.id, controller)
+
+      try {
+        await invokeSendMessage(messages, win, controller.signal)
+        console.log('[main] invokeSendMessage completed, returning success')
+        return { success: true }
+      } catch (error) {
+        console.error('[main] Error handling message:', error)
+        return { success: false, error: (error as Error).message || 'Unknown error' }
+      } finally {
+        abortControllers.delete(win.id)
+      }
+    }
+  )
+
+  // Agent cancel handler
+  ipcMain.on('agent:cancel', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (win) {
+      const controller = abortControllers.get(win.id)
+      controller?.abort()
+    }
   })
 
   createWindow()
@@ -77,6 +116,3 @@ app.on('window-all-closed', () => {
     app.quit()
   }
 })
-
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.

@@ -1,14 +1,20 @@
 ﻿<script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../store/user'
 import AssistantPage from './AssistantPage.vue'
 import ProjectPage from './ProjectPage.vue'
 import ExpertPage from './ExpertPage.vue'
 import AutomationPage from './AutomationPage.vue'
+import { useAgentStore } from '@renderer/store/agent'
 
 const router = useRouter()
 const userStore = useUserStore()
+const agentStore = useAgentStore()
+
+// 通过本地 computed 包装 agentStore，建立正确的 Vue 响应式依赖链
+const currentMessages = computed(() => agentStore.currentMessages)
+const isStreaming = computed(() => agentStore.isStreaming)
 
 // ── Sidebar state ──
 const sidebarCollapsed = ref(false)
@@ -112,10 +118,23 @@ const taskInput = ref('')
 const model = ref('Auto')
 const modelOpen = ref(false)
 const showInputPlusMenu = ref(false)
-const messages = ref<{ role: 'user' | 'ai'; content: string }[]>([])
-const thinking = ref(false)
 const chipsScrollRef = ref<HTMLElement | null>(null)
 const bottomRef = ref<HTMLElement | null>(null)
+
+// 从 store 获取消息和状态（computed 代理，模板变量名不变）
+const messages = computed(() => {
+  const msgs = currentMessages.value.map((m) => ({
+    role: m.role as 'user' | 'assistant',
+    content: m.content
+  }))
+  console.log('[Home] messages computed, count:', msgs.length, 'roles:', msgs.map(m => m.role))
+  return msgs
+})
+const thinking = computed(() => {
+  const val = isStreaming.value
+  console.log('[Home] thinking computed:', val)
+  return val
+})
 
 const categories = [
   { key: 'work', label: '日常办公', icon: '☀️' },
@@ -148,19 +167,25 @@ const scrollChips = (dir: 'left' | 'right'): void => {
 
 const sendMessage = (): void => {
   if (!taskInput.value.trim()) return
-  const txt = taskInput.value.trim()
+  const content = taskInput.value.trim()
   taskInput.value = ''
-  messages.value.push({ role: 'user', content: txt })
-  thinking.value = true
-  setTimeout(() => {
-    thinking.value = false
-    messages.value.push({
-      role: 'ai',
-      content: `收到你的任务「${txt}」，我来帮你处理……`
-    })
-    nextTick(() => bottomRef.value?.scrollIntoView({ behavior: 'smooth' }))
-  }, 1400)
+  agentStore.sendMessage(content)
 }
+
+// 消息更新时自动滚动到底部
+watch(
+  () => [currentMessages.value.length, isStreaming.value],
+  ([len, streaming]) => {
+    console.log('[Home] watch triggered, msg count:', len, 'streaming:', streaming)
+    nextTick(() => bottomRef.value?.scrollIntoView({ behavior: 'smooth' }))
+  }
+)
+
+// 诊断: 直接追踪模板渲染条件
+watchEffect(() => {
+  const msgCount = currentMessages.value.length
+  console.log('[Home] watchEffect: msgCount:', msgCount, 'welcome?', msgCount === 0)
+})
 
 const handleLogout = (): void => {
   userMenuOpen.value = false
@@ -452,7 +477,7 @@ const switchNav = (nav: NavKey): void => {
         <!-- User bar -->
         <div class="user-bar">
           <button class="user-avatar-btn" data-usermenu-trigger="true" @click="userMenuOpen = !userMenuOpen">
-            <div class="user-avatar">鸾</div>
+            <div class="user-avatar">KE</div>
             <span class="user-name">KE-WORK用户</span>
           </button>
           <button class="user-icon-btn">
@@ -551,7 +576,7 @@ const switchNav = (nav: NavKey): void => {
         <!-- ── New Task Page ── -->
         <div v-if="activeNav === '新建任务'" key="newtask" class="new-task-page">
           <!-- Welcome state -->
-          <div v-if="messages.length === 0" class="welcome-area">
+          <div v-if="currentMessages.length === 0" class="welcome-area">
             <h2 class="welcome-heading">KE-WORK，<span class="welcome-highlight">我帮你</span></h2>
 
             <!-- Category pills -->
@@ -708,10 +733,16 @@ const switchNav = (nav: NavKey): void => {
                     <line x1="8" y1="23" x2="16" y2="23" />
                   </svg>
                 </button>
-                <button class="send-btn" :class="{ 'send-btn--active': taskInput.trim() }" @click="sendMessage">
+                <!-- 发送/停止按钮 -->
+                <button v-if="!isStreaming" class="send-btn" :class="{ 'send-btn--active': taskInput.trim() }" @click="sendMessage">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                     <line x1="22" y1="2" x2="11" y2="13" />
                     <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                  </svg>
+                </button>
+                <button v-else class="send-btn send-btn--stop" @click="agentStore.cancelMessage()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="4" y="4" width="16" height="16" rx="2" />
                   </svg>
                 </button>
                 <!-- Plus Menu -->
@@ -812,7 +843,7 @@ const switchNav = (nav: NavKey): void => {
             <div class="chat-messages">
               <div v-for="(msg, i) in messages" :key="i"
                 :class="['chat-bubble-row', { 'chat-bubble-row--user': msg.role === 'user' }]">
-                <div v-if="msg.role === 'ai'" class="chat-avatar chat-avatar--ai">
+                <div v-if="msg.role === 'assistant'" class="chat-avatar chat-avatar--ai">
                   <svg width="20" height="20" viewBox="0 0 64 64" fill="none">
                     <ellipse cx="32" cy="38" rx="12" ry="14" fill="#0891b2" />
                     <circle cx="32" cy="20" r="9" fill="#0891b2" />
@@ -864,11 +895,17 @@ const switchNav = (nav: NavKey): void => {
                       <line x1="8" y1="23" x2="16" y2="23" />
                     </svg>
                   </button>
-                  <button class="send-btn" :class="{ 'send-btn--active': taskInput.trim() }" @click="sendMessage">
+                  <!-- 发送/停止按钮 -->
+                  <button v-if="!isStreaming" class="send-btn" :class="{ 'send-btn--active': taskInput.trim() }" @click="sendMessage">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                       stroke-width="2.5">
                       <line x1="22" y1="2" x2="11" y2="13" />
                       <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                    </svg>
+                  </button>
+                  <button v-else class="send-btn send-btn--stop" @click="agentStore.cancelMessage()">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                      <rect x="4" y="4" width="16" height="16" rx="2" />
                     </svg>
                   </button>
                   <!-- Plus Menu -->
@@ -2249,6 +2286,16 @@ const switchNav = (nav: NavKey): void => {
 
 .send-btn:active {
   transform: scale(0.9);
+}
+
+.send-btn--stop {
+  background: #ef4444;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.35);
+}
+
+.send-btn--stop:hover {
+  background: #dc2626;
 }
 
 /* Input footer */
