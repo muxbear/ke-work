@@ -225,23 +225,15 @@ const handleWechatLogin = async (): Promise<void> => {
 
       <!-- Work mode selector -->
       <div class="work-mode-bar">
-        <label :class="['work-mode-option', { 'work-mode-option--active': workMode === 'local' }]">
-          <input
-            v-model="workMode"
-            type="radio"
-            value="local"
-            class="work-mode-radio"
-          />
-          <span class="work-mode-label">本地工作</span>
+        <label :class="['mode-btn', { 'mode-btn--active': workMode === 'local' }]">
+          <input v-model="workMode" type="radio" value="local" class="mode-radio" />
+          <span class="mode-dot"></span>
+          本地工作
         </label>
-        <label :class="['work-mode-option', { 'work-mode-option--active': workMode === 'cloud' }]">
-          <input
-            v-model="workMode"
-            type="radio"
-            value="cloud"
-            class="work-mode-radio"
-          />
-          <span class="work-mode-label">云端工作</span>
+        <label :class="['mode-btn', { 'mode-btn--active': workMode === 'cloud' }]">
+          <input v-model="workMode" type="radio" value="cloud" class="mode-radio" />
+          <span class="mode-dot"></span>
+          云端工作
         </label>
       </div>
 
@@ -613,63 +605,71 @@ const handleWechatLogin = async (): Promise<void> => {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Work Mode Selector
+   Work Mode Selector (segmented button group)
    ═══════════════════════════════════════════════════════════════════════════ */
 .work-mode-bar {
   display: flex;
-  gap: 8px;
-  padding: 0 32px 0;
-  margin-bottom: 16px;
+  justify-content: center;
+  padding: 3px;
+  margin: 0 32px 14px;
+  background: var(--tab-bg);
+  border-radius: 10px;
+  gap: 2px;
 }
 
-.work-mode-option {
-  flex: 1;
-  display: flex;
+.mode-btn {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 6px;
-  padding: 10px 0;
-  border-radius: var(--radius-tab);
-  background: var(--tab-bg);
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-subtitle);
   cursor: pointer;
   transition:
-    background-color 0.2s ease,
-    box-shadow 0.2s ease;
+    background-color 0.25s ease,
+    color 0.25s ease,
+    box-shadow 0.25s ease;
 }
 
-.work-mode-option--active {
+.mode-btn--active {
   background: #ffffff;
+  color: var(--text-title);
   box-shadow: var(--tab-shadow);
 }
 
-.work-mode-radio {
-  appearance: none;
-  width: 16px;
-  height: 16px;
+.mode-btn:not(.mode-btn--active):hover {
+  color: var(--brand-600);
+}
+
+/* Hidden native radio */
+.mode-radio {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Custom radio dot */
+.mode-dot {
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   border: 2px solid rgba(8, 145, 178, 0.3);
-  margin: 0;
-  cursor: pointer;
+  flex-shrink: 0;
   transition:
-    border-color 0.2s ease,
-    background-color 0.2s ease;
-  position: relative;
+    border-color 0.25s ease,
+    border-width 0.25s ease;
 }
 
-.work-mode-radio:checked {
+.mode-btn--active .mode-dot {
   border-color: var(--brand-600);
-  border-width: 5px;
-}
-
-.work-mode-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-subtitle);
-  transition: color 0.2s ease;
-}
-
-.work-mode-option--active .work-mode-label {
-  color: var(--text-title);
+  border-width: 4px;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1136,7 +1136,7 @@ const handleWechatLogin = async (): Promise<void> => {
   }
 
   .work-mode-bar {
-    padding: 0 20px 0;
+    margin: 0 20px 12px;
   }
 
   .card-body {
@@ -1167,7 +1167,7 @@ const handleWechatLogin = async (): Promise<void> => {
   }
 
   .work-mode-bar {
-    padding: 0 16px 0;
+    margin: 0 16px 12px;
   }
 
   .card-body {
