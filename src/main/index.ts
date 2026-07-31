@@ -2,6 +2,8 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { invokeSendMessage } from './agent/service'
+import { detectOS } from './platform'
+import { initDataDirectory } from './data-dir'
 
 import icon from '../../resources/icon.png?asset'
 
@@ -49,6 +51,10 @@ function createWindow(): void {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  // 检测操作系统类型并初始化数据目录
+  detectOS()
+  initDataDirectory()
+
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 
