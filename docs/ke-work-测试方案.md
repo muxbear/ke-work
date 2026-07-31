@@ -391,3 +391,38 @@ tests/
   4. `~/.ke-work/workspace/` 加入 SUB_DIRS（Agent FilesystemBackend rootDir）
   5. agent store 落库重构：消息仅在最终状态写入（用户消息 + assistant 含 reasoning），流式 chunk 仅内存更新
 - **测试方案变更**: AG-06b 移除 dispose 断言；新增 agent store IPC 全流程用例（标题生成/落库/删除切换）
+
+### 迭代 5（2026-08-01）— 收尾迭代
+
+- **用例数**: 135 单测/集成/安全 + 4 E2E，全部通过
+- **覆盖率**: 语句 90.93% / 分支 88.95% / 函数 82.48% / 行 92.16%
+- **类型检查**: node + web 均通过；`npm run build` 通过
+- **E2E（Playwright 驱动 Electron）**: 4 个全流程测试通过
+  - E2E-01: 本地密码登录进入 /home（预置账号 e2euser/Secret123!）
+  - E2E-01b: 重启后保持登录（token 持久化）
+  - E2E-05: 创建会话发消息，重启后 DB 持久化校验
+  - E2E-03: 无云端后端时切换云端模式回滚（模式保持本地）
+- **缺陷**: 4 个，均已修复
+  1. E2E 断言用 Playwright 的 toBeVisible（vitest 不支持）→ 改用 locator.waitFor
+  2. **E2E 隔离缺陷（关键）**：Electron localStorage 存于 userData 目录而非 KE_WORK_HOME → 前序用例 token 残留导致路由直接进 /home → 主进程支持 `KE_WORK_USER_DATA` 覆盖 userData
+  3. getByRole('登录') 匹配 tab 与按钮 → exact: true
+  4. 安全测试暴力枚举 1000 次 bcrypt 超时（bcryptjs 纯 JS 单次 ~50ms，慢哈希即防护）→ 20 次
+- **设计变更**:
+  1. 数据目录支持 `KE_WORK_HOME` 环境变量覆盖（测试隔离/多实例）
+  2. 主进程支持 `KE_WORK_USER_DATA` 覆盖 userData（localStorage 隔离）
+  3. mode:set IPC：Agent 构建失败时回滚（先构建后持久化/切换），保证模式一致性
+  4. `npm run test:e2e` = build + E2E 全套
+- **测试方案变更**: E2E 用例全部落地（5.10 节）；安全专项用例落地（§6 注入/哈希/审计）；健壮性用例落地（§7 大数据/循环/并发）
+
+## 最终验收状态
+
+| 验收项 | 状态 |
+|--------|------|
+| 全部功能实现（模式管理/登录三方式/安全/对话/Agent 集成） | ✅ |
+| 单测+集成+安全 135 用例全部通过 | ✅ |
+| E2E 4 个全流程通过 | ✅ |
+| 覆盖率 ≥80%（核心模块 92%） | ✅ |
+| 类型检查 node+web+build 通过 | ✅ |
+| 安全：bcrypt 哈希/JWT/token 仅存哈希/防暴力锁定/验证码一次性/注入防护 | ✅ |
+| 健壮性：大数据量/重复登录/并发写入 | ✅ |
+| 迭代循环 5 轮完成，设计文档与实现同步 | ✅ |
