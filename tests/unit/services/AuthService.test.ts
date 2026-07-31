@@ -102,7 +102,9 @@ describe('AuthService 短信登录', () => {
         smsSender: { send: (m: string, c: string) => Promise<void> }
       }
     ).smsSender = {
-      send: async (_m: string, code: string) => sentCodes.push(code)
+      send: async (_m: string, code: string) => {
+        sentCodes.push(code)
+      }
     }
   })
 

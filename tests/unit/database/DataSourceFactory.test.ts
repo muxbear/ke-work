@@ -27,6 +27,11 @@ describe('DataSourceFactory', () => {
     )
   })
 
+  it('DSF-04: auth repository 可创建', () => {
+    factory.setMode('local')
+    expect(factory.createAuthRepository().constructor.name).toBe('LocalAuthRepository')
+  })
+
   it('DSF-03: cloud 模式可切换（云端实现迭代 3 提供）', () => {
     factory.setMode('cloud')
     expect(factory.getMode()).toBe('cloud')

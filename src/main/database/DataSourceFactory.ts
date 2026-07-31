@@ -4,9 +4,11 @@ import { homedir } from 'os'
 import type { WorkMode } from '../mode/work-mode'
 import type { IConfigRepository } from './interfaces/IConfigRepository'
 import type { IConversationRepository } from './interfaces/IConversationRepository'
+import type { IAuthRepository } from './interfaces/IAuthRepository'
 import { LocalDataSource } from './local/LocalDataSource'
 import { LocalConfigRepository } from './local/LocalConfigRepository'
 import { LocalConversationRepository } from './local/LocalConversationRepository'
+import { LocalAuthRepository } from './local/LocalAuthRepository'
 
 /**
  * 数据源工厂（单例 + 工厂 + 观察者）
@@ -67,6 +69,12 @@ export class DataSourceFactory {
     return this.mode === 'local'
       ? new LocalConversationRepository(this.getLocalDataSource())
       : (this.createCloudRepository('conversation') as IConversationRepository)
+  }
+
+  createAuthRepository(): IAuthRepository {
+    return this.mode === 'local'
+      ? new LocalAuthRepository(this.getLocalDataSource())
+      : (this.createCloudRepository('auth') as IAuthRepository)
   }
 
   private getLocalDataSource(): LocalDataSource {

@@ -6,7 +6,12 @@ export default defineConfig({
     environment: 'node',
     coverage: {
       provider: 'v8',
-      include: ['src/main/mode/**', 'src/main/database/**']
+      include: [
+        'src/main/mode/**',
+        'src/main/database/**',
+        'src/main/security/**',
+        'src/main/services/**'
+      ]
     }
   }
 })

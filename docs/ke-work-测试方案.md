@@ -337,3 +337,20 @@ tests/
   2. WM-05（切换失败回滚）依赖云端可用性检查，移至迭代 3
   3. 新增用例：setMode 非法值校验、会话 id UUID 格式
 - **技术选型确认**: better-sqlite3 v13（Node 24 原生模块正常）、Vitest v4
+
+### 迭代 2（2026-07-31）
+
+- **用例数**: 72（迭代 1 的 31 + 迭代 2 新增 41），全部通过
+- **覆盖率**: 语句 94.53% / 分支 86.71% / 函数 92.68% / 行 96.62%
+- **类型检查**: `npm run typecheck:node` 通过
+- **缺陷**: 3 个，均已修复
+  1. secure-storage 测试设计缺陷：实例内存缓存掩盖文件读取路径（损坏文件用例需重新构造实例）
+  2. AuthService 测试路径错误（tests/unit/services 深一层）
+  3. **设计缺陷（关键）**：锁定时间在 Repository 层用真实 `Date.now()`，检查在 Service 层用注入时钟——两个时钟不一致导致 SEC-14 失败。修复：`recordLoginFailure` 增加 `now` 参数，时间由 Service 统一注入
+- **设计变更**:
+  1. 迁移 v2：新增 `sms_codes` 表（验证码哈希 + TTL + 一次性标记）
+  2. `IAuthRepository.recordLoginFailure` 签名增加 `now` 参数（时钟可注入）
+  3. 密码哈希选用 bcryptjs（纯 JS，Electron 打包无原生编译问题）
+  4. 短信/微信登录：未注册账号自动注册（username=手机号 / wx_<hash>）
+- **测试方案变更**: 新增用例 SEC-09（token 仅存哈希）、AUTH-10（登出）、DSF-04（auth repository）
+- **过程改进**: `git add -A` 误提交 coverage 产物 → coverage 加入 .gitignore；提交前必须跑 typecheck
