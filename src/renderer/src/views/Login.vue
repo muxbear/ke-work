@@ -8,6 +8,7 @@ import SlideCaptcha from '../components/SlideCaptcha.vue'
 const router = useRouter()
 const userStore = useUserStore()
 
+const workMode = ref<'local' | 'cloud'>('local')
 const activeTab = ref<'sms' | 'password' | 'wechat'>('sms')
 const smsMobile = ref('')
 const smsCode = ref('')
@@ -219,7 +220,29 @@ const handleWechatLogin = async (): Promise<void> => {
           <path d="M32 25 L29 28 L35 28Z" fill="#f0fdff" />
         </svg>
         <h1 class="title">KE-WORK</h1>
-        <p class="subtitle">Ke-Work Desktop · 欢迎回来</p>
+        <p class="subtitle">ke-work · 和你一起工作</p>
+      </div>
+
+      <!-- Work mode selector -->
+      <div class="work-mode-bar">
+        <label :class="['work-mode-option', { 'work-mode-option--active': workMode === 'local' }]">
+          <input
+            v-model="workMode"
+            type="radio"
+            value="local"
+            class="work-mode-radio"
+          />
+          <span class="work-mode-label">本地工作</span>
+        </label>
+        <label :class="['work-mode-option', { 'work-mode-option--active': workMode === 'cloud' }]">
+          <input
+            v-model="workMode"
+            type="radio"
+            value="cloud"
+            class="work-mode-radio"
+          />
+          <span class="work-mode-label">云端工作</span>
+        </label>
       </div>
 
       <!-- Tabs -->
@@ -587,6 +610,66 @@ const handleWechatLogin = async (): Promise<void> => {
   color: var(--text-subtitle);
   margin: 4px 0 0;
   line-height: 1.5;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Work Mode Selector
+   ═══════════════════════════════════════════════════════════════════════════ */
+.work-mode-bar {
+  display: flex;
+  gap: 8px;
+  padding: 0 32px 0;
+  margin-bottom: 16px;
+}
+
+.work-mode-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 0;
+  border-radius: var(--radius-tab);
+  background: var(--tab-bg);
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.work-mode-option--active {
+  background: #ffffff;
+  box-shadow: var(--tab-shadow);
+}
+
+.work-mode-radio {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(8, 145, 178, 0.3);
+  margin: 0;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+  position: relative;
+}
+
+.work-mode-radio:checked {
+  border-color: var(--brand-600);
+  border-width: 5px;
+}
+
+.work-mode-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-subtitle);
+  transition: color 0.2s ease;
+}
+
+.work-mode-option--active .work-mode-label {
+  color: var(--text-title);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1052,6 +1135,10 @@ const handleWechatLogin = async (): Promise<void> => {
     padding: 0 20px;
   }
 
+  .work-mode-bar {
+    padding: 0 20px 0;
+  }
+
   .card-body {
     padding: 16px 20px 24px;
   }
@@ -1077,6 +1164,10 @@ const handleWechatLogin = async (): Promise<void> => {
 
   .card-tabs {
     padding: 0 16px;
+  }
+
+  .work-mode-bar {
+    padding: 0 16px 0;
   }
 
   .card-body {
