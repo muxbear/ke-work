@@ -96,4 +96,38 @@ describe('mode IPC handlers', () => {
     expect(storeSet).not.toHaveBeenCalled()
     expect(setMode).not.toHaveBeenCalled()
   })
+
+  it('session:check 未登录返回 loggedIn=false', async () => {
+    const ipc = createFakeIpcMain()
+    registerModeHandlers(ipc as never, {
+      modeStore: { getMode: () => 'local' } as never,
+      dataSourceFactory: { setMode: vi.fn(), getMode: () => 'local' } as never,
+      agentManager: { switchMode: vi.fn() } as never,
+      authService: { logout: vi.fn() } as never,
+      session: new SessionService()
+    })
+    const result = await ipc.invoke<{ success: boolean; data?: { loggedIn: boolean } }>(
+      'session:check'
+    )
+    expect(result.success).toBe(true)
+    expect(result.data!.loggedIn).toBe(false)
+  })
+
+  it('session:check 已登录返回 loggedIn=true', async () => {
+    const ipc = createFakeIpcMain()
+    const session = new SessionService()
+    session.setCurrentUser('u1')
+    registerModeHandlers(ipc as never, {
+      modeStore: { getMode: () => 'local' } as never,
+      dataSourceFactory: { setMode: vi.fn(), getMode: () => 'local' } as never,
+      agentManager: { switchMode: vi.fn() } as never,
+      authService: { logout: vi.fn() } as never,
+      session
+    })
+    const result = await ipc.invoke<{ success: boolean; data?: { loggedIn: boolean } }>(
+      'session:check'
+    )
+    expect(result.success).toBe(true)
+    expect(result.data!.loggedIn).toBe(true)
+  })
 })

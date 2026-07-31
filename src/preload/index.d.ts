@@ -69,6 +69,8 @@ export interface ConversationAPI {
 export interface ModeAPI {
   getWorkMode(): Promise<IpcResult<'local' | 'cloud'>>
   setWorkMode(mode: 'local' | 'cloud'): Promise<IpcResult<string>>
+  /** 校验主进程会话（localStorage token 可能残留，主进程为权威） */
+  checkSession(): Promise<IpcResult<{ loggedIn: boolean }>>
 }
 
 /** 渲染层可见的完整 API 形状 */

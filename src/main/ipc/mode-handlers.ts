@@ -26,6 +26,11 @@ export function registerModeHandlers(ipc: IpcMain, deps: ModeHandlerDeps): void 
     return { success: true, data: dataSourceFactory.getMode() }
   })
 
+  // 会话校验：渲染层路由守卫依赖（localStorage token 可能残留，主进程 session 为权威）
+  ipc.handle('session:check', async () => {
+    return { success: true, data: { loggedIn: deps.session.getCurrentUserId() !== null } }
+  })
+
   ipc.handle('mode:set', async (_event, mode?: unknown) => {
     if (typeof mode !== 'string' || !(VALID_MODES as string[]).includes(mode)) {
       return { success: false, error: '非法的工作模式' }

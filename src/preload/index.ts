@@ -81,6 +81,9 @@ const api = {
   },
   setWorkMode(mode: string) {
     return ipcRenderer.invoke('mode:set', mode)
+  },
+  checkSession() {
+    return ipcRenderer.invoke('session:check')
   }
 }
 

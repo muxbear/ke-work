@@ -95,6 +95,21 @@ describe('E2E 登录全流程', () => {
     expect(row).toBeTruthy()
   }, 90_000)
 
+  it('E2E-02b: 残留 token 但主进程会话为空 → 路由守卫拦截回登录页', async () => {
+    // 前置：E2E-01 已登录（localStorage 有 token、session.json 有用户）
+    await launchApp()
+    await page.locator('.home-layout').waitFor({ state: 'visible', timeout: WAIT })
+    await app.close()
+    // 模拟主进程会话丢失（删除 session.json），localStorage token 残留
+    const { rmSync } = await import('fs')
+    rmSync(join(dataHome, 'config', 'session.json'), { force: true })
+    // 重启：路由守卫校验主进程会话失败 → 清除本地登录态 → 回登录页
+    await launchApp()
+    await page.locator('.login-card').waitFor({ state: 'visible', timeout: WAIT })
+    const homeVisible = await page.locator('.home-layout').count()
+    expect(homeVisible).toBe(0)
+  }, 90_000)
+
   it('E2E-03: 无云端后端时切换云端模式回滚（模式保持本地 + 错误提示）', async () => {
     await launchApp()
     // 前序用例的登录态仍在 localStorage → 清除后回到登录页
