@@ -372,3 +372,22 @@ tests/
   3. 主进程装配：WorkModeStore → DataSourceFactory → ElectronSafeStorage(jwt-secret) → AuthService → registerAuthHandlers
   4. preload 暴露 auth:* 五个通道；`IpcResult<T>` 统一结果包裹
 - **测试方案变更**: 新增 IPC-04（成功路径）、DSF 云端创建/未配置报错用例；REN 用例确认 store 层（组件级留待迭代 5 E2E）
+
+### 迭代 4（2026-07-31）
+
+- **用例数**: 119（迭代 3 的 100 + 迭代 4 新增 19），全部通过
+- **覆盖率**: 语句 90.93% / 分支 87.2% / 函数 82.48% / 行 92.16%
+- **类型检查**: node + web 均通过
+- **缺陷**: 5 个，均已修复
+  1. AgentBuilder 工厂返回 Promise 无法链式调用（违反设计 §6.1 用法）→ `withModeDefaults()` 改同步，异步 store 创建延后到 build()
+  2. mock 未覆盖 `@langchain/langgraph-checkpoint-postgres/store` 子路径 → 测试真实连接 Postgres（ECONNREFUSED 5432）
+  3. DeepAgent 无 dispose API（deepagents v1.11 类型验证）→ 移除 dispose 调用，记录资源管理说明
+  4. `PostgresStore` 实际导出在 `/store` 子路径（设计文档 §6.1 的 import 路径修正）
+  5. StoreBackend namespace 工厂参数类型为 `StoreBackendContext`（非 serverInfo 结构）→ 改用 config.configurable.user_id
+- **设计变更**:
+  1. AgentBuilder 工厂同步返回（链式 API），`build()` 时 await store 创建
+  2. StoreBackend 命名空间：按运行时上下文 `config.configurable.user_id` 隔离（用户身份注入点）
+  3. DeepAgent 清理：无 dispose/close API，模式切换直接丢弃旧实例
+  4. `~/.ke-work/workspace/` 加入 SUB_DIRS（Agent FilesystemBackend rootDir）
+  5. agent store 落库重构：消息仅在最终状态写入（用户消息 + assistant 含 reasoning），流式 chunk 仅内存更新
+- **测试方案变更**: AG-06b 移除 dispose 断言；新增 agent store IPC 全流程用例（标题生成/落库/删除切换）
