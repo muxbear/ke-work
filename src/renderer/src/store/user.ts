@@ -1,23 +1,29 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
+export interface AuthResult {
+  token: string
+  refreshToken: string
+  user: { id: string; username: string; mobile?: string }
+}
+
 export const useUserStore = defineStore('user', () => {
   const token = ref(localStorage.getItem('user_token') || '')
-  const userInfo = ref<{ id?: string; name?: string; mobile?: string }>({})
+  const refreshToken = ref(localStorage.getItem('user_refresh_token') || '')
+  const userInfo = ref<{ id?: string; username?: string; mobile?: string }>({})
 
   const isLoggedIn = computed(() => Boolean(token.value))
 
-  function setToken(value: string) {
-    token.value = value
-    localStorage.setItem('user_token', value)
+  function setLogin(result: AuthResult): void {
+    token.value = result.token
+    refreshToken.value = result.refreshToken
+    userInfo.value = result.user
+    localStorage.setItem('user_token', result.token)
+    localStorage.setItem('user_refresh_token', result.refreshToken)
+    localStorage.setItem('user_info', JSON.stringify(result.user))
   }
 
-  function setUserInfo(info: { id?: string; name?: string; mobile?: string }) {
-    userInfo.value = info
-    localStorage.setItem('user_info', JSON.stringify(info))
-  }
-
-  function restoreUserInfo() {
+  function restoreUserInfo(): void {
     const saved = localStorage.getItem('user_info')
     if (saved) {
       try {
@@ -28,21 +34,16 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  function logout() {
+  function logout(): void {
     token.value = ''
+    refreshToken.value = ''
     userInfo.value = {}
     localStorage.removeItem('user_token')
+    localStorage.removeItem('user_refresh_token')
     localStorage.removeItem('user_info')
   }
 
   restoreUserInfo()
 
-  return {
-    token,
-    userInfo,
-    isLoggedIn,
-    setToken,
-    setUserInfo,
-    logout
-  }
+  return { token, refreshToken, userInfo, isLoggedIn, setLogin, logout }
 })
