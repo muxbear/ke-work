@@ -66,8 +66,13 @@ export interface ConversationAPI {
   ): Promise<IpcResult<ConversationMessage>>
 }
 
+export interface ModeAPI {
+  getWorkMode(): Promise<IpcResult<'local' | 'cloud'>>
+  setWorkMode(mode: 'local' | 'cloud'): Promise<IpcResult<string>>
+}
+
 /** 渲染层可见的完整 API 形状 */
-export interface KeWorkWindowApi extends AgentAPI, AuthAPI, ConversationAPI {}
+export interface KeWorkWindowApi extends AgentAPI, AuthAPI, ConversationAPI, ModeAPI {}
 
 declare global {
   interface Window {

@@ -11,7 +11,21 @@ const workModeStore = useWorkModeStore()
 
 const workMode = computed({
   get: () => workModeStore.mode,
-  set: (value: 'local' | 'cloud') => workModeStore.setMode(value)
+  set: (value: 'local' | 'cloud') => {
+    if (value === workModeStore.mode) return
+    // 模式切换：经主进程联动（Agent 重建/工厂切换/登录态清除），失败回滚 UI 状态
+    workModeStore
+      .setMode(value)
+      .then(() => {
+        userStore.logout()
+        error.value = ''
+        apiError.value = ''
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err)
+        error.value = message || '切换工作模式失败'
+      })
+  }
 })
 const activeTab = ref<'sms' | 'password' | 'wechat'>('sms')
 const smsMobile = ref('')

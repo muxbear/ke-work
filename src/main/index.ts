@@ -13,6 +13,7 @@ import { registerAuthHandlers } from './ipc/auth-handlers'
 import { AgentManager } from './agent/AgentManager'
 import { ConversationService } from './services/ConversationService'
 import { registerConversationHandlers } from './ipc/conversation-handlers'
+import { registerModeHandlers } from './ipc/mode-handlers'
 
 import icon from '../../resources/icon.png?asset'
 
@@ -109,6 +110,14 @@ app.whenReady().then(() => {
     dataSourceFactory.createConversationRepository()
   )
   registerConversationHandlers(ipcMain, { conversationService })
+
+  // ── 注册工作模式 IPC ──
+  registerModeHandlers(ipcMain, {
+    modeStore: workModeStore,
+    dataSourceFactory,
+    agentManager,
+    authService
+  })
 
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')

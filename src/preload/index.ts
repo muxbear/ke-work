@@ -74,6 +74,13 @@ const api = {
     msg: { role: string; content: string; reasoning?: string }
   ) {
     return ipcRenderer.invoke('conversation:add-message', id, msg)
+  },
+  // ── 工作模式 API ──
+  getWorkMode() {
+    return ipcRenderer.invoke('mode:get')
+  },
+  setWorkMode(mode: string) {
+    return ipcRenderer.invoke('mode:set', mode)
   }
 }
 
