@@ -10,7 +10,8 @@ function createFakeIpcMain() {
     }),
     handlers,
     async invoke(channel: string, ...args: unknown[]) {
-      return handlers.get(channel)!.(...args)
+      // 模拟 Electron：handler 首个参数为 IpcMainInvokeEvent
+      return handlers.get(channel)!({} as never, ...args)
     }
   }
 }
