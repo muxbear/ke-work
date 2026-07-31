@@ -75,6 +75,15 @@ describe('LocalDataSource', () => {
     expect(left.n).toBe(0)
   })
 
+  it('LS-10: 迁移 v2 创建 sms_codes 表', () => {
+    const tables = ds
+      .getDb()
+      .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+      .all()
+      .map((r) => (r as { name: string }).name)
+    expect(tables).toContain('sms_codes')
+  })
+
   it('LS-09: better-sqlite3 同步写不产生 database is locked', () => {
     const db = ds.getDb()
     for (let i = 0; i < 100; i++) {

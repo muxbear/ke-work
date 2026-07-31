@@ -61,6 +61,18 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_log_user ON audit_logs(user_id, created_at DESC);
 `
+  },
+  {
+    version: 2,
+    sql: `
+CREATE TABLE IF NOT EXISTS sms_codes (
+  mobile     TEXT PRIMARY KEY,
+  code_hash  TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used       INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+`
   }
 ]
 
