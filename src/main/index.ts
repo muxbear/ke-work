@@ -19,6 +19,11 @@ import icon from '../../resources/icon.png?asset'
 
 import 'dotenv/config'
 
+// 测试/多实例隔离：允许通过环境变量覆盖 Electron 用户数据目录（localStorage 等）
+if (process.env.KE_WORK_USER_DATA) {
+  app.setPath('userData', process.env.KE_WORK_USER_DATA)
+}
+
 // 取消控制器映射（按窗口 ID）
 const abortControllers = new Map<number, AbortController>()
 

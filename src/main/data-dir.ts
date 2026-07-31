@@ -51,13 +51,14 @@ let instance: DataDirectory | null = null
 
 /**
  * 初始化数据目录（应用启动时调用）
- * 创建 ~/.ke-work 基础目录及所有子目录
+ * 创建基础目录及所有子目录；基础目录默认为 ~/.ke-work，
+ * 可通过环境变量 KE_WORK_HOME 覆盖（测试隔离/多实例部署）
  * @returns DataDirectory 单例实例
  */
 export function initDataDirectory(): DataDirectory {
   if (instance) return instance
 
-  const baseDir = join(homedir(), '.ke-work')
+  const baseDir = process.env.KE_WORK_HOME ?? join(homedir(), '.ke-work')
 
   if (!existsSync(baseDir)) {
     mkdirSync(baseDir, { recursive: true })

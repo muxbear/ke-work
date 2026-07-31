@@ -83,7 +83,7 @@ describe('审计日志完整性', () => {
     const ds2 = new LocalDataSource(':memory:')
     const repo2 = new LocalAuthRepository(ds2)
     await repo2.addAuditLog({ action: 'login_failed', detail: '{"locked":false}' })
-    await repo2.addAuditLog({ action: 'login', detail: null })
+    await repo2.addAuditLog({ action: 'login' })
     const rows = ds2
       .getDb()
       .prepare('SELECT action FROM audit_logs ORDER BY created_at')
