@@ -2,13 +2,17 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../store/user'
-import { exchangeWechatCode, loginByPassword, loginBySms, sendSmsCode } from '../api/auth'
+import { useWorkModeStore } from '../store/workMode'
 import SlideCaptcha from '../components/SlideCaptcha.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
+const workModeStore = useWorkModeStore()
 
-const workMode = ref<'local' | 'cloud'>('local')
+const workMode = computed({
+  get: () => workModeStore.mode,
+  set: (value: 'local' | 'cloud') => workModeStore.setMode(value)
+})
 const activeTab = ref<'sms' | 'password' | 'wechat'>('sms')
 const smsMobile = ref('')
 const smsCode = ref('')
@@ -79,7 +83,8 @@ const handleCaptchaVerified = async (): Promise<void> => {
   captchaOpen.value = false
   loading.value = true
   try {
-    await sendSmsCode(smsMobile.value)
+    const result = await window.api.sendSmsCode(smsMobile.value)
+    if (!result.success) throw new Error(result.error)
     startCountdown()
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
@@ -108,9 +113,9 @@ const handleLogin = async (): Promise<void> => {
     }
     loading.value = true
     try {
-      const result = await loginBySms(smsMobile.value, smsCode.value)
-      userStore.setToken(result.token)
-      userStore.setUserInfo(result.user)
+      const result = await window.api.loginBySms(smsMobile.value, smsCode.value)
+      if (!result.success) throw new Error(result.error)
+      userStore.setLogin(result.data)
       router.push('/home')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err)
@@ -132,9 +137,9 @@ const handleLogin = async (): Promise<void> => {
     }
     loading.value = true
     try {
-      const result = await loginByPassword(account.value, password.value)
-      userStore.setToken(result.token)
-      userStore.setUserInfo(result.user)
+      const result = await window.api.loginByPassword(account.value, password.value)
+      if (!result.success) throw new Error(result.error)
+      userStore.setLogin(result.data)
       router.push('/home')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err)
@@ -169,9 +174,9 @@ const handleWechatLogin = async (): Promise<void> => {
       throw new Error('未获取到微信授权 code。')
     }
 
-    const response = await exchangeWechatCode(result.code)
-    userStore.setToken(response.token)
-    userStore.setUserInfo(response.user)
+    const response = await window.api.loginByWechat(result.code)
+    if (!response.success) throw new Error(response.error)
+    userStore.setLogin(response.data)
     router.push('/home')
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)

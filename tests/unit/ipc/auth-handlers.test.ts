@@ -9,9 +9,9 @@ function createFakeIpcMain() {
       handlers.set(channel, fn)
     }),
     handlers,
-    async invoke(channel: string, ...args: unknown[]) {
+    async invoke<T = unknown>(channel: string, ...args: unknown[]): Promise<T> {
       // 模拟 Electron：handler 首个参数为 IpcMainInvokeEvent
-      return handlers.get(channel)!({} as never, ...args)
+      return handlers.get(channel)!({} as never, ...args) as T
     }
   }
 }
@@ -40,7 +40,7 @@ describe('auth IPC handlers', () => {
       authService: {} as never,
       dataSourceFactory: {} as never
     })
-    const result = await ipc.invoke('auth:login-password')
+    const result = await ipc.invoke<{ success: boolean; error?: string }>('auth:login-password')
     expect(result.success).toBe(false)
     expect(result.error).toBeTruthy()
   })
@@ -53,7 +53,11 @@ describe('auth IPC handlers', () => {
       } as never,
       dataSourceFactory: {} as never
     })
-    const result = await ipc.invoke('auth:login-password', 'wangke', 'wrong')
+    const result = await ipc.invoke<{ success: boolean; error?: string }>(
+      'auth:login-password',
+      'wangke',
+      'wrong'
+    )
     expect(result.success).toBe(false)
     expect(result.error).toBe('账号或密码错误')
   })
@@ -66,8 +70,11 @@ describe('auth IPC handlers', () => {
       } as never,
       dataSourceFactory: {} as never
     })
-    const result = await ipc.invoke('auth:login-password', 'wangke', 'Secret123!')
+    const result = await ipc.invoke<{
+      success: boolean
+      data?: { token: string }
+    }>('auth:login-password', 'wangke', 'Secret123!')
     expect(result.success).toBe(true)
-    expect(result.data.token).toBe('t')
+    expect(result.data!.token).toBe('t')
   })
 })

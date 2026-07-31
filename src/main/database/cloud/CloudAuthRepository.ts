@@ -62,18 +62,28 @@ export class CloudAuthRepository implements IAuthRepository {
   findByWechatOpenid(_openid: string): Promise<UserRecord | null> {
     return Promise.resolve(null)
   }
-  async createUser(): Promise<UserRecord> {
+  async createUser(_input: {
+    username: string
+    passwordHash?: string
+    mobile?: string
+    wechatOpenid?: string
+  }): Promise<UserRecord> {
     throw new Error('cloud users are managed by server')
   }
-  async recordLoginFailure(): Promise<{ attempts: number; lockedUntil: number | null }> {
+  async recordLoginFailure(
+    _userId: string,
+    _maxAttempts: number,
+    _lockDurationMs: number,
+    _now: number
+  ): Promise<{ attempts: number; lockedUntil: number | null }> {
     return { attempts: 0, lockedUntil: null }
   }
-  async resetLoginFailures(): Promise<void> {}
-  async updateToken(): Promise<void> {}
-  async saveSmsCode(): Promise<void> {}
+  async resetLoginFailures(_userId: string): Promise<void> {}
+  async updateToken(_userId: string, _tokenHash: string | null, _expireAt: number | null): Promise<void> {}
+  async saveSmsCode(_mobile: string, _codeHash: string, _expiresAt: number): Promise<void> {}
   async findSmsCode(_mobile: string): Promise<SmsCodeRecord | null> {
     return null
   }
-  async markSmsCodeUsed(): Promise<void> {}
+  async markSmsCodeUsed(_mobile: string): Promise<void> {}
   async addAuditLog(_input: AuditLogInput): Promise<void> {}
 }

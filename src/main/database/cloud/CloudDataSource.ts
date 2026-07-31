@@ -1,4 +1,4 @@
-import axios, { AxiosError, type AxiosInstance } from 'axios'
+import axios, { AxiosError, type AxiosInstance, type AxiosResponse } from 'axios'
 
 /** 云端 API 业务错误（HTTP 错误与业务错误码统一归一化） */
 export class CloudApiError extends Error {
@@ -56,12 +56,13 @@ export class CloudDataSource {
     })
     // 响应拦截：解包 + 401 刷新重试
     this.client.interceptors.response.use(
-      (response) => {
+      (response: AxiosResponse) => {
         const envelope = response.data as ApiEnvelope
         if (envelope && typeof envelope.code === 'number' && envelope.code !== 0) {
           throw new CloudApiError(envelope.message ?? '请求失败', response.status, envelope.code)
         }
-        return (envelope?.data as T) ?? (response.data as T)
+        // 解包返回 data（调用处已通过泛型声明实际类型）
+        return (envelope?.data ?? response.data) as unknown as AxiosResponse
       },
       async (error: AxiosError) => {
         if (error.response?.status === 401) {

@@ -1,9 +1,15 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, safeStorage } from 'electron'
 import { join } from 'path'
+import { randomBytes } from 'crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { invokeSendMessage } from './agent/service'
 import { detectOS } from './platform'
-import { initDataDirectory } from './data-dir'
+import { getDataDirectory, initDataDirectory } from './data-dir'
+import { WorkModeStore } from './mode/work-mode'
+import { DataSourceFactory } from './database/DataSourceFactory'
+import { AuthService } from './services/AuthService'
+import { ElectronSafeStorage } from './security/secure-storage'
+import { registerAuthHandlers } from './ipc/auth-handlers'
 
 import icon from '../../resources/icon.png?asset'
 
@@ -54,6 +60,40 @@ app.whenReady().then(() => {
   // 检测操作系统类型并初始化数据目录
   detectOS()
   initDataDirectory()
+
+  // ── 初始化工作模式 ──
+  const dataDir = getDataDirectory()
+  const workModeStore = new WorkModeStore(dataDir.getDir('config'))
+  const mode = workModeStore.getMode()
+
+  // ── 初始化数据源工厂 ──
+  const dataSourceFactory = DataSourceFactory.getInstance()
+  dataSourceFactory.configure({
+    localDbPath: join(dataDir.getBaseDir(), 'ke-work.db'),
+    cloudBaseUrl: process.env.CLOUD_API_BASE_URL ?? ''
+  })
+  dataSourceFactory.setMode(mode)
+
+  // ── 初始化安全存储与 JWT 密钥 ──
+  const secureStorage = new ElectronSafeStorage(
+    join(dataDir.getDir('config'), 'secrets.bin'),
+    safeStorage
+  )
+  let jwtSecret = secureStorage.get('jwt-secret')
+  if (!jwtSecret) {
+    jwtSecret = randomBytes(32).toString('hex')
+    secureStorage.set('jwt-secret', jwtSecret)
+  }
+
+  // ── 初始化认证服务 ──
+  const authService = new AuthService({
+    repository: dataSourceFactory.createAuthRepository(),
+    jwtSecret,
+    secureStorage
+  })
+
+  // ── 注册认证 IPC ──
+  registerAuthHandlers(ipcMain, { authService, dataSourceFactory })
 
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')

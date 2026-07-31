@@ -1,14 +1,11 @@
 /// <reference types="vite/client" />
+import type { KeWorkWindowApi } from '../../preload'
+import type { ElectronAPI } from '@electron-toolkit/preload'
 
 declare global {
   interface Window {
-    api: {
-      openExternal: (url: string) => Promise<void>
-      openWeChatAuth: (
-        authUrl: string,
-        redirectUri: string
-      ) => Promise<{ code?: string; error?: string }>
-    }
+    electron: ElectronAPI
+    api: KeWorkWindowApi
   }
 }
 

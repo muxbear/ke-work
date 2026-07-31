@@ -36,6 +36,22 @@ const api = {
   onAgentDone(callback: () => void): () => void {
     ipcRenderer.on('agent:stream-done', callback)
     return () => ipcRenderer.removeListener('agent:stream-done', callback)
+  },
+  // ── 认证 API ──
+  loginByPassword(account: string, password: string) {
+    return ipcRenderer.invoke('auth:login-password', account, password)
+  },
+  loginBySms(mobile: string, code: string) {
+    return ipcRenderer.invoke('auth:login-sms', mobile, code)
+  },
+  sendSmsCode(mobile: string) {
+    return ipcRenderer.invoke('auth:send-sms-code', mobile)
+  },
+  loginByWechat(code: string) {
+    return ipcRenderer.invoke('auth:login-wechat', code)
+  },
+  logout(account: string) {
+    return ipcRenderer.invoke('auth:logout', account)
   }
 }
 
