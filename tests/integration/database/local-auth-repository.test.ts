@@ -39,18 +39,18 @@ describe('LocalAuthRepository', () => {
   it('recordLoginFailure 递增计数并在达到上限时锁定', async () => {
     const user = await repo.createUser({ username: 'wangke', passwordHash: 'h' })
     for (let i = 1; i <= 4; i++) {
-      const r = await repo.recordLoginFailure(user.id, 5, 900_000)
+      const r = await repo.recordLoginFailure(user.id, 5, 900_000, 1_000_000)
       expect(r.attempts).toBe(i)
       expect(r.lockedUntil).toBeNull()
     }
-    const r5 = await repo.recordLoginFailure(user.id, 5, 900_000)
+    const r5 = await repo.recordLoginFailure(user.id, 5, 900_000, 1_000_000)
     expect(r5.attempts).toBe(0)
-    expect(r5.lockedUntil).not.toBeNull()
+    expect(r5.lockedUntil).toBe(1_900_000)
   })
 
   it('resetLoginFailures 清零计数并解除锁定', async () => {
     const user = await repo.createUser({ username: 'wangke', passwordHash: 'h' })
-    await repo.recordLoginFailure(user.id, 5, 900_000)
+    await repo.recordLoginFailure(user.id, 5, 900_000, 1_000_000)
     await repo.resetLoginFailures(user.id)
     const reloaded = await repo.findByAccount('wangke')
     expect(reloaded!.failedLoginAttempts).toBe(0)

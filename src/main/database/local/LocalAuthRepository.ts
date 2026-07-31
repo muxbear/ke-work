@@ -97,9 +97,9 @@ export class LocalAuthRepository implements IAuthRepository {
   async recordLoginFailure(
     userId: string,
     maxAttempts: number,
-    lockDurationMs: number
+    lockDurationMs: number,
+    now: number
   ): Promise<{ attempts: number; lockedUntil: number | null }> {
-    const now = Date.now()
     const row = this.ds.getDb().prepare('SELECT * FROM users WHERE id = ?').get(userId) as UserRow
     const attempts = row.failed_login_attempts + 1
     let lockedUntil: number | null = null

@@ -43,11 +43,15 @@ export interface IAuthRepository {
     mobile?: string
     wechatOpenid?: string
   }): Promise<UserRecord>
-  /** 记录登录失败，返回最新计数与锁定时间 */
+  /**
+   * 记录登录失败，返回最新计数与锁定时间
+   * @param now 当前时间（由调用方注入，保证时钟可测）
+   */
   recordLoginFailure(
     userId: string,
     maxAttempts: number,
-    lockDurationMs: number
+    lockDurationMs: number,
+    now: number
   ): Promise<{ attempts: number; lockedUntil: number | null }>
   resetLoginFailures(userId: string): Promise<void>
   updateToken(userId: string, tokenHash: string | null, expireAt: number | null): Promise<void>
