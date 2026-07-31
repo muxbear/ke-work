@@ -88,3 +88,73 @@ describe('AuthService 密码登录', () => {
     )
   })
 })
+
+describe('AuthService 短信登录', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>
+  const sentCodes: string[] = []
+
+  beforeEach(async () => {
+    sentCodes.length = 0
+    ctx = await setup(1_000_000)
+    // 覆盖 smsSender 记录验证码
+    ;(
+      ctx.service as unknown as {
+        smsSender: { send: (m: string, c: string) => Promise<void> }
+      }
+    ).smsSender = {
+      send: async (_m: string, code: string) => sentCodes.push(code)
+    }
+  })
+
+  it('发送验证码：生成 6 位数字码并调用发送器', async () => {
+    await ctx.service.sendSmsCode('13800138000')
+    expect(sentCodes.length).toBe(1)
+    expect(sentCodes[0]).toMatch(/^\d{6}$/)
+  })
+
+  it('AUTH-06: 正确验证码登录成功；未注册手机号自动注册', async () => {
+    await ctx.service.sendSmsCode('13900139000')
+    const code = sentCodes[sentCodes.length - 1]
+    const result = await ctx.service.loginBySms('13900139000', code)
+    expect(result.user.mobile).toBe('13900139000')
+  })
+
+  it('SEC-15: 过期验证码拒绝', async () => {
+    await ctx.service.sendSmsCode('13800138000')
+    const code = sentCodes[sentCodes.length - 1]
+    ctx.advance(5 * 60 * 1000 + 1)
+    await expect(ctx.service.loginBySms('13800138000', code)).rejects.toThrow(/验证码/)
+  })
+
+  it('SEC-16: 验证码一次性，复用拒绝', async () => {
+    await ctx.service.sendSmsCode('13800138000')
+    const code = sentCodes[sentCodes.length - 1]
+    await ctx.service.loginBySms('13800138000', code)
+    await expect(ctx.service.loginBySms('13800138000', code)).rejects.toThrow(/验证码/)
+  })
+
+  it('错误验证码拒绝', async () => {
+    await ctx.service.sendSmsCode('13800138000')
+    await expect(ctx.service.loginBySms('13800138000', '000000')).rejects.toThrow(/验证码/)
+  })
+
+  it('非法手机号拒绝发送', async () => {
+    await expect(ctx.service.sendSmsCode('123')).rejects.toThrow(/手机号/)
+  })
+})
+
+describe('AuthService 微信登录', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>
+
+  beforeEach(async () => {
+    ctx = await setup(1_000_000)
+  })
+
+  it('AUTH-07: 合法 code 登录成功；未注册 openid 自动注册', async () => {
+    const result = await ctx.service.loginByWechat('code-1')
+    expect(result.user.username).toBeTruthy()
+    // 再次登录同一 code 对应的 openid，返回同一用户
+    const result2 = await ctx.service.loginByWechat('code-1')
+    expect(result2.user.id).toBe(result.user.id)
+  })
+})
