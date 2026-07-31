@@ -43,7 +43,8 @@ CREATE TABLE IF NOT EXISTS conversations (
   user_id TEXT NOT NULL,
   title TEXT NOT NULL DEFAULT '新对话',
   created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS messages (
   id TEXT PRIMARY KEY,
@@ -52,7 +53,8 @@ CREATE TABLE IF NOT EXISTS messages (
   content TEXT NOT NULL DEFAULT '',
   reasoning TEXT,
   metadata TEXT,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS config (
   key TEXT PRIMARY KEY,
@@ -65,7 +67,8 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   action TEXT NOT NULL,
   detail TEXT,
   ip_address TEXT,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 CREATE TABLE IF NOT EXISTS sms_codes (
   mobile TEXT PRIMARY KEY,

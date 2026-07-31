@@ -85,7 +85,11 @@ const sendMessage = (): void => {
   if (!taskInput.value.trim()) return
   const content = taskInput.value.trim()
   taskInput.value = ''
-  agentStore.sendMessage(content)
+  agentStore.sendMessage(content).catch((err: unknown) => {
+    console.error('[NewTaskPage] sendMessage failed:', err)
+    // 失败时恢复输入内容，避免用户输入丢失且无反馈
+    taskInput.value = content
+  })
 }
 
 // ── Close plus menu on outside click ──

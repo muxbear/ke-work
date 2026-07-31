@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { registerModeHandlers } from '../../../src/main/ipc/mode-handlers'
+import { SessionService } from '../../../src/main/services/SessionService'
 
 function createFakeIpcMain() {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
@@ -21,7 +22,8 @@ describe('mode IPC handlers', () => {
       modeStore: { getMode: () => 'local' } as never,
       dataSourceFactory: { setMode: vi.fn(), getMode: () => 'local' } as never,
       agentManager: { switchMode: vi.fn() } as never,
-      authService: { logout: vi.fn() } as never
+      authService: { logout: vi.fn() } as never,
+      session: new SessionService()
     })
     expect(ipc.handle).toHaveBeenCalledWith('mode:get', expect.any(Function))
     expect(ipc.handle).toHaveBeenCalledWith('mode:set', expect.any(Function))
@@ -33,7 +35,8 @@ describe('mode IPC handlers', () => {
       modeStore: { getMode: () => 'cloud' } as never,
       dataSourceFactory: { setMode: vi.fn(), getMode: () => 'cloud' } as never,
       agentManager: { switchMode: vi.fn() } as never,
-      authService: { logout: vi.fn() } as never
+      authService: { logout: vi.fn() } as never,
+      session: new SessionService()
     })
     const result = await ipc.invoke<{ success: boolean; data?: string }>('mode:get')
     expect(result.success).toBe(true)
@@ -50,7 +53,8 @@ describe('mode IPC handlers', () => {
       modeStore: { getMode: () => 'local', setMode: storeSet } as never,
       dataSourceFactory: { setMode, getMode: () => 'local' } as never,
       agentManager: { switchMode } as never,
-      authService: { logout } as never
+      authService: { logout } as never,
+      session: new SessionService()
     })
     const result = await ipc.invoke<{ success: boolean }>('mode:set', 'cloud')
     expect(result.success).toBe(true)
@@ -66,7 +70,8 @@ describe('mode IPC handlers', () => {
       modeStore: { getMode: () => 'local' } as never,
       dataSourceFactory: { setMode: vi.fn(), getMode: () => 'local' } as never,
       agentManager: { switchMode: vi.fn() } as never,
-      authService: { logout: vi.fn() } as never
+      authService: { logout: vi.fn() } as never,
+      session: new SessionService()
     })
     const result = await ipc.invoke<{ success: boolean; error?: string }>('mode:set', 'bogus')
     expect(result.success).toBe(false)
@@ -82,7 +87,8 @@ describe('mode IPC handlers', () => {
       modeStore: { getMode: () => 'local', setMode: storeSet } as never,
       dataSourceFactory: { setMode, getMode: () => 'local' } as never,
       agentManager: { switchMode } as never,
-      authService: { logout: vi.fn() } as never
+      authService: { logout: vi.fn() } as never,
+      session: new SessionService()
     })
     const result = await ipc.invoke<{ success: boolean; error?: string }>('mode:set', 'cloud')
     expect(result.success).toBe(false)

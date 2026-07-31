@@ -1,10 +1,12 @@
 import type { AuthService } from '../services/AuthService'
 import type { DataSourceFactory } from '../database/DataSourceFactory'
+import type { SessionService } from '../services/SessionService'
 import type { IpcMain } from 'electron'
 
 interface AuthHandlerDeps {
   authService: AuthService
   dataSourceFactory: DataSourceFactory
+  session: SessionService
 }
 
 /** 统一的 IPC 结果包裹：成功返回 data，失败返回 { success:false, error } */
@@ -19,7 +21,9 @@ export function registerAuthHandlers(ipc: IpcMain, deps: AuthHandlerDeps): void 
       return { success: false, error: '参数错误' }
     }
     try {
-      return ok(await deps.authService.loginByPassword(account, password))
+      const result = await deps.authService.loginByPassword(account, password)
+      deps.session.setCurrentUser(result.user.id)
+      return ok(result)
     } catch (err) {
       return { success: false, error: (err as Error).message }
     }
@@ -30,7 +34,9 @@ export function registerAuthHandlers(ipc: IpcMain, deps: AuthHandlerDeps): void 
       return { success: false, error: '参数错误' }
     }
     try {
-      return ok(await deps.authService.loginBySms(mobile, code))
+      const result = await deps.authService.loginBySms(mobile, code)
+      deps.session.setCurrentUser(result.user.id)
+      return ok(result)
     } catch (err) {
       return { success: false, error: (err as Error).message }
     }
@@ -53,7 +59,9 @@ export function registerAuthHandlers(ipc: IpcMain, deps: AuthHandlerDeps): void 
       return { success: false, error: '参数错误' }
     }
     try {
-      return ok(await deps.authService.loginByWechat(code))
+      const result = await deps.authService.loginByWechat(code)
+      deps.session.setCurrentUser(result.user.id)
+      return ok(result)
     } catch (err) {
       return { success: false, error: (err as Error).message }
     }
@@ -65,6 +73,7 @@ export function registerAuthHandlers(ipc: IpcMain, deps: AuthHandlerDeps): void 
     }
     try {
       await deps.authService.logout(account)
+      deps.session.clear()
       return ok(null)
     } catch (err) {
       return { success: false, error: (err as Error).message }

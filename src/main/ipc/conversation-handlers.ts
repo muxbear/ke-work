@@ -1,8 +1,10 @@
 import type { ConversationService } from '../services/ConversationService'
+import type { SessionService } from '../services/SessionService'
 import type { IpcMain } from 'electron'
 
 interface ConversationHandlerDeps {
   conversationService: ConversationService
+  session: SessionService
 }
 
 function ok<T>(data: T): { success: true; data: T } {
@@ -25,11 +27,13 @@ export function registerConversationHandlers(ipc: IpcMain, deps: ConversationHan
     }
   })
 
-  ipc.handle('conversation:create', async (_event, userId?: unknown, title?: unknown) => {
-    if (typeof userId !== 'string' || typeof title !== 'string') {
+  ipc.handle('conversation:create', async (_event, _userId?: unknown, title?: unknown) => {
+    if (typeof title !== 'string') {
       return fail('参数错误')
     }
     try {
+      // userId 由主进程会话注入，不信任渲染层传参（防止外键/越权）
+      const userId = deps.session.requireUserId()
       return ok(await conversationService.create({ userId, title }))
     } catch (err) {
       return fail((err as Error).message)

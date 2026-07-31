@@ -3,12 +3,14 @@ import type { WorkModeStore } from '../mode/work-mode'
 import type { DataSourceFactory } from '../database/DataSourceFactory'
 import type { AgentManager } from '../agent/AgentManager'
 import type { AuthService } from '../services/AuthService'
+import type { SessionService } from '../services/SessionService'
 
 interface ModeHandlerDeps {
   modeStore: WorkModeStore
   dataSourceFactory: DataSourceFactory
   agentManager: AgentManager
   authService: AuthService
+  session: SessionService
 }
 
 const VALID_MODES = ['local', 'cloud']
@@ -37,6 +39,7 @@ export function registerModeHandlers(ipc: IpcMain, deps: ModeHandlerDeps): void 
       dataSourceFactory.setMode(mode as 'local' | 'cloud')
       // 4. 清除登录态（不同模式需重新登录）
       await authService.logout('')
+      deps.session.clear()
       return { success: true, data: mode }
     } catch (err) {
       return { success: false, error: (err as Error).message }

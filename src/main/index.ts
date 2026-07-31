@@ -8,6 +8,7 @@ import { getDataDirectory, initDataDirectory } from './data-dir'
 import { WorkModeStore } from './mode/work-mode'
 import { DataSourceFactory } from './database/DataSourceFactory'
 import { AuthService } from './services/AuthService'
+import { SessionService } from './services/SessionService'
 import { ElectronSafeStorage } from './security/secure-storage'
 import { registerAuthHandlers } from './ipc/auth-handlers'
 import { AgentManager } from './agent/AgentManager'
@@ -94,15 +95,16 @@ app.whenReady().then(() => {
     secureStorage.set('jwt-secret', jwtSecret)
   }
 
-  // ── 初始化认证服务 ──
+  // ── 初始化认证服务与会话 ──
   const authService = new AuthService({
     repository: dataSourceFactory.createAuthRepository(),
     jwtSecret,
     secureStorage
   })
+  const session = new SessionService(dataDir.getDir('config'))
 
   // ── 注册认证 IPC ──
-  registerAuthHandlers(ipcMain, { authService, dataSourceFactory })
+  registerAuthHandlers(ipcMain, { authService, dataSourceFactory, session })
 
   // ── 初始化智能体（AgentManager）──
   const agentManager = new AgentManager(dataDir.getDir('workspace'))
@@ -114,14 +116,15 @@ app.whenReady().then(() => {
   const conversationService = new ConversationService(
     dataSourceFactory.createConversationRepository()
   )
-  registerConversationHandlers(ipcMain, { conversationService })
+  registerConversationHandlers(ipcMain, { conversationService, session })
 
   // ── 注册工作模式 IPC ──
   registerModeHandlers(ipcMain, {
     modeStore: workModeStore,
     dataSourceFactory,
     agentManager,
-    authService
+    authService,
+    session
   })
 
   // Set app user model id for windows
