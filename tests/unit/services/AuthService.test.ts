@@ -158,3 +158,32 @@ describe('AuthService 微信登录', () => {
     expect(result2.user.id).toBe(result.user.id)
   })
 })
+
+describe('AuthService token 与登出', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>
+
+  beforeEach(async () => {
+    ctx = await setup(1_000_000)
+    const hash = await hashPassword('Secret123!')
+    await ctx.repo.createUser({ username: 'wangke', passwordHash: hash })
+  })
+
+  it('SEC-09: 登录后数据库仅存 token 的 SHA-256 哈希', async () => {
+    const result = await ctx.service.loginByPassword('wangke', 'Secret123!')
+    const user = await ctx.repo.findByAccount('wangke')
+    expect(user!.tokenHash).toMatch(/^[0-9a-f]{64}$/)
+    expect(user!.tokenHash).not.toContain(result.token)
+  })
+
+  it('AUTH-10: 登出后 token 失效并写审计', async () => {
+    await ctx.service.loginByPassword('wangke', 'Secret123!')
+    await ctx.service.logout('wangke')
+    const user = await ctx.repo.findByAccount('wangke')
+    expect(user!.tokenHash).toBeNull()
+    const log = ctx.repo['ds']
+      .getDb()
+      .prepare('SELECT * FROM audit_logs WHERE action = ?')
+      .all('logout')
+    expect(log.length).toBe(1)
+  })
+})
