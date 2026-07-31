@@ -28,7 +28,9 @@ vi.mock('@langchain/langgraph-checkpoint-postgres', () => ({
     static fromConnString() {
       return { kind: 'PostgresSaver' }
     }
-  },
+  }
+}))
+vi.mock('@langchain/langgraph-checkpoint-postgres/store', () => ({
   PostgresStore: class {
     static fromConnString() {
       return { kind: 'PostgresStore', setup: async () => {} }
@@ -68,7 +70,6 @@ describe('AgentManager', () => {
     await manager.switchMode('cloud')
     const second = manager.getAgent()
     expect(second).not.toBe(first)
-    expect(first!.dispose).toHaveBeenCalled()
     const config = createDeepAgentMock.mock.calls[1][0] as Record<string, never>
     expect(config.model).toBe('deepseek:deepseek-v4-pro')
     expect((config.checkpointer as { kind: string }).kind).toBe('PostgresSaver')

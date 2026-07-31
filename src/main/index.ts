@@ -10,6 +10,9 @@ import { DataSourceFactory } from './database/DataSourceFactory'
 import { AuthService } from './services/AuthService'
 import { ElectronSafeStorage } from './security/secure-storage'
 import { registerAuthHandlers } from './ipc/auth-handlers'
+import { AgentManager } from './agent/AgentManager'
+import { ConversationService } from './services/ConversationService'
+import { registerConversationHandlers } from './ipc/conversation-handlers'
 
 import icon from '../../resources/icon.png?asset'
 
@@ -94,6 +97,18 @@ app.whenReady().then(() => {
 
   // ── 注册认证 IPC ──
   registerAuthHandlers(ipcMain, { authService, dataSourceFactory })
+
+  // ── 初始化智能体（AgentManager）──
+  const agentManager = new AgentManager(dataDir.getDir('workspace'))
+  agentManager
+    .init(mode)
+    .catch((err) => console.error('[main] agent init failed:', err))
+
+  // ── 注册会话 IPC ──
+  const conversationService = new ConversationService(
+    dataSourceFactory.createConversationRepository()
+  )
+  registerConversationHandlers(ipcMain, { conversationService })
 
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')

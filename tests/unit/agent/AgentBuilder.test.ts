@@ -31,7 +31,9 @@ vi.mock('@langchain/langgraph-checkpoint-postgres', () => ({
     static fromConnString(conn: string) {
       return { kind: 'PostgresSaver', conn }
     }
-  },
+  }
+}))
+vi.mock('@langchain/langgraph-checkpoint-postgres/store', () => ({
   PostgresStore: class {
     static fromConnString(conn: string) {
       return { kind: 'PostgresStore', conn, setup: async () => {} }
@@ -47,7 +49,7 @@ vi.mock('@langchain/langgraph', () => ({
   }
 }))
 
-import { AgentBuilder, createAgentBuilder } from '../../../src/main/agent/AgentBuilder'
+import { createAgentBuilder } from '../../../src/main/agent/AgentBuilder'
 
 describe('AgentBuilder', () => {
   let workDir: string

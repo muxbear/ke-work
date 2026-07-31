@@ -37,8 +37,37 @@ export interface AuthAPI {
   logout(account: string): Promise<IpcResult<null>>
 }
 
+export interface Conversation {
+  id: string
+  userId: string
+  title: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface ConversationMessage {
+  id: string
+  conversationId: string
+  role: string
+  content: string
+  reasoning?: string
+  createdAt: number
+}
+
+export interface ConversationAPI {
+  listConversations(): Promise<IpcResult<Conversation[]>>
+  createConversation(title: string): Promise<IpcResult<Conversation>>
+  getConversation(id: string): Promise<IpcResult<Conversation & { messages: ConversationMessage[] } | null>>
+  updateConversationTitle(id: string, title: string): Promise<IpcResult<Conversation>>
+  deleteConversation(id: string): Promise<IpcResult<null>>
+  addConversationMessage(
+    id: string,
+    msg: { role: string; content: string; reasoning?: string }
+  ): Promise<IpcResult<ConversationMessage>>
+}
+
 /** 渲染层可见的完整 API 形状 */
-export interface KeWorkWindowApi extends AgentAPI, AuthAPI {}
+export interface KeWorkWindowApi extends AgentAPI, AuthAPI, ConversationAPI {}
 
 declare global {
   interface Window {

@@ -3,7 +3,7 @@ import { join } from 'path'
 import { homedir } from 'os'
 
 /** 预定义的子目录列表 */
-export const SUB_DIRS = ['conversations', 'logs', 'config', 'cache'] as const
+export const SUB_DIRS = ['conversations', 'logs', 'config', 'cache', 'workspace'] as const
 export type SubDir = (typeof SUB_DIRS)[number]
 
 /**

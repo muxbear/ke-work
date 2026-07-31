@@ -2,7 +2,8 @@ import { createDeepAgent, FilesystemBackend, StoreBackend } from 'deepagents'
 import type { SubAgent, DeepAgent } from 'deepagents'
 import { InMemoryStore } from '@langchain/langgraph'
 import { SqliteSaver } from '@langchain/langgraph-checkpoint-sqlite'
-import { PostgresSaver, PostgresStore } from '@langchain/langgraph-checkpoint-postgres'
+import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres'
+import { PostgresStore } from '@langchain/langgraph-checkpoint-postgres/store'
 import type { WorkMode } from '../mode/work-mode'
 
 /** 云端 PostgreSQL 连接串（生产环境经 secure-storage 读取） */
@@ -17,7 +18,8 @@ function createBackend(mode: WorkMode, workspaceDir: string) {
     })
   }
   return new StoreBackend({
-    namespace: (rt: { serverInfo: { user: { identity: string } } }) => [rt.serverInfo.user.identity]
+    // 按用户身份隔离命名空间（user id 经运行时上下文注入）
+    namespace: (context) => [String(context.config?.configurable?.user_id ?? 'default')]
   })
 }
 

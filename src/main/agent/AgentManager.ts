@@ -20,10 +20,13 @@ export class AgentManager {
     this.agent = await this.builder.build()
   }
 
-  /** 切换工作模式：重建 backend 与记忆，保留自定义配置 */
+  /**
+   * 切换工作模式：重建 backend 与记忆，保留自定义配置
+   * 注：deepagents 的 DeepAgent 无 dispose/close API（资源由 backend 管理），
+   * 旧实例直接丢弃，新实例在 build 时重建 checkpointer/store
+   */
   async switchMode(newMode: WorkMode): Promise<void> {
     if (!this.builder) throw new Error('AgentManager not initialized')
-    await this.agent?.dispose?.()
     await this.builder.setMode(newMode).withModeDefaults()
     this.agent = await this.builder.build()
   }

@@ -52,6 +52,28 @@ const api = {
   },
   logout(account: string) {
     return ipcRenderer.invoke('auth:logout', account)
+  },
+  // ── 会话 API ──
+  listConversations() {
+    return ipcRenderer.invoke('conversation:list')
+  },
+  createConversation(title: string) {
+    return ipcRenderer.invoke('conversation:create', '', title)
+  },
+  getConversation(id: string) {
+    return ipcRenderer.invoke('conversation:get', id)
+  },
+  updateConversationTitle(id: string, title: string) {
+    return ipcRenderer.invoke('conversation:update', id, title)
+  },
+  deleteConversation(id: string) {
+    return ipcRenderer.invoke('conversation:delete', id)
+  },
+  addConversationMessage(
+    id: string,
+    msg: { role: string; content: string; reasoning?: string }
+  ) {
+    return ipcRenderer.invoke('conversation:add-message', id, msg)
   }
 }
 
