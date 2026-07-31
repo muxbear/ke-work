@@ -451,3 +451,23 @@ tests/
 **验证**: 复现测试（userId='' 外键失败）✓、契约测试（未登录拒绝/注入真实 userId）✓、SessionService 持久化恢复 ✓、真实 wangke 用户会话创建 ✓、E2E 4 个全过 ✓
 
 **用例数**: 144（+9 新增：SessionService 5、契约 2、复现 2）+ 4 E2E
+
+### 迭代 6b（2026-08-01）— 发送消息异常排查（第二次用户报告）
+
+**用户报告**: 登录 wangke 后新建任务发消息"点击发送按钮异常"。
+
+**排查过程**（Playwright 驱动真实 Electron 复现，捕获主进程/渲染层日志）:
+- 复现结果显示**消息发送链路正常**: Deep Agent 生成完整自我介绍回复，渲染层无 console 错误
+- 同时发现**真实生产缺陷**: `@langchain/langgraph-checkpoint-sqlite` 嵌套的 better-sqlite3 v12.11.1
+  原生模块 ABI 不匹配（Node 24=137 vs Electron 39=140）→ AgentManager.init 失败
+- 影响面: 模式切换/云端 Agent 构建（mode:set 回滚）；**本地消息发送不受影响**（agent:send 链路不加载 checkpointer）
+
+**修复**:
+1. 重装 checkpoint-sqlite 恢复嵌套模块（Node ABI，测试/构建一致）
+2. 尝试编译 Electron ABI: node-gyp 需 Electron 39 headers（npmmirror 镜像缺失 v39.2.6，GitHub 直连超时）→ 记录为发布流程事项
+3. 复现测试保留为正式回归（tests/e2e/repro-send.e2e.ts）
+
+**结论**: 用户环境"异常"与最新构建行为不符（E2E 证明发送正常），判断为用户运行了修复前构建
+（迭代 6 外键 bug 的静默失败表现）。需用户用最新构建重测确认。
+
+**用例数**: 144 + 5 E2E
