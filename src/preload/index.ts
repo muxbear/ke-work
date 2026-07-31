@@ -22,6 +22,17 @@ const api = {
     ipcRenderer.on('agent:stream-chunk', handler)
     return () => ipcRenderer.removeListener('agent:stream-chunk', handler)
   },
+  onAgentThinking(callback: (chunk: string) => void): () => void {
+    const handler = (_event: Electron.IpcRendererEvent, chunk: string): void => {
+      callback(chunk)
+    }
+    ipcRenderer.on('agent:stream-thinking', handler)
+    return () => ipcRenderer.removeListener('agent:stream-thinking', handler)
+  },
+  onAgentThinkingDone(callback: () => void): () => void {
+    ipcRenderer.on('agent:stream-thinking-done', callback)
+    return () => ipcRenderer.removeListener('agent:stream-thinking-done', callback)
+  },
   onAgentDone(callback: () => void): () => void {
     ipcRenderer.on('agent:stream-done', callback)
     return () => ipcRenderer.removeListener('agent:stream-done', callback)

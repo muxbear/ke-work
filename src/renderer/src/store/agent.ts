@@ -5,6 +5,7 @@ export interface Message {
   id: string
   role: 'user' | 'assistant' | 'tool'
   content: string
+  reasoning?: string
 }
 
 export interface Conversation {
@@ -54,6 +55,7 @@ export const useAgentStore = defineStore('agent', () => {
   const conversations = ref<Conversation[]>(loadCoversations())
   const currentConversationId = ref<string | null>(null)
   const isStreaming = ref<boolean>(false)
+  const isThinking = ref<boolean>(false)
 
   // ====== 计算属性(Getters) ======
   const currentConversation = computed(
@@ -184,6 +186,7 @@ export const useAgentStore = defineStore('agent', () => {
     console.log('[store] pushed assistantMsg placeholder')
 
     isStreaming.value = true
+    isThinking.value = true
     console.log('[store] window.api available:', typeof (window as any).api, 'sendAgentMessage:', typeof (window as any).api?.sendAgentMessage, 'onAgentChunk:', typeof (window as any).api?.onAgentChunk)
 
     // 通过 reactive 代理获取 assistant 消息，确保后续修改能触发响应式更新
@@ -193,6 +196,21 @@ export const useAgentStore = defineStore('agent', () => {
       console.log('[store] getAssistantMsg from conv.messages, count:', msgs.length, 'last role:', last?.role)
       return last && last.role === 'assistant' ? last : undefined
     }
+
+    // 深度思考（reasoning）流
+    const unlistenThinking = (window.api as any).onAgentThinking((chunk: string) => {
+      const msg = getAssistantMsg()
+      if (msg) {
+        msg.reasoning = (msg.reasoning || '') + chunk
+      }
+      conv.updateAt = Date.now()
+      persist()
+    })
+
+    const unlistenThinkingDone = (window.api as any).onAgentThinkingDone(() => {
+      console.log('[store] onAgentThinkingDone received')
+      isThinking.value = false
+    })
 
     const unlistenChunk = (window.api as any).onAgentChunk((chunk: string) => {
       const msg = getAssistantMsg()
@@ -253,7 +271,10 @@ export const useAgentStore = defineStore('agent', () => {
         msg.content = '抱歉，请求出错了，请重试'
       }
     } finally {
+      unlistenThinking()
+      unlistenThinkingDone()
       unlistenChunk()
+      isThinking.value = false
       isStreaming.value = false
       persist()
       console.log('[store] sendMessage finally, isStreaming:', isStreaming.value, 'final conv messages:', JSON.stringify(conv.messages.map(m => ({role:m.role, content:m.content.slice(0,50)}))))
@@ -262,6 +283,7 @@ export const useAgentStore = defineStore('agent', () => {
 
   function cancelMessage(): void {
     ;(window.api as any).cancelAgentMessage()
+    isThinking.value = false
   }
 
   return {
@@ -269,6 +291,7 @@ export const useAgentStore = defineStore('agent', () => {
     sendMessage,
     cancelMessage,
     isStreaming,
+    isThinking,
     currentConversationId,
     createConversation,
     deleteConversation,

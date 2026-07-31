@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useAgentStore } from '../store/agent'
+import MessageContent from '../components/MessageContent.vue'
 
 const agentStore = useAgentStore()
 
 // 通过本地 computed 包装 agentStore，建立正确的 Vue 响应式依赖链
 const currentMessages = computed(() => agentStore.currentMessages)
 const isStreaming = computed(() => agentStore.isStreaming)
+const isThinking = computed(() => agentStore.isThinking)
 
 // ── State ──
 const category = ref('work')
@@ -21,16 +23,33 @@ const bottomRef = ref<HTMLElement | null>(null)
 const messages = computed(() => {
   const msgs = currentMessages.value.map((m) => ({
     role: m.role as 'user' | 'assistant',
-    content: m.content
+    content: m.content,
+    reasoning: m.reasoning
   }))
   console.log('[NewTaskPage] messages computed, count:', msgs.length, 'roles:', msgs.map(m => m.role))
   return msgs
 })
 const thinking = computed(() => {
-  const val = isStreaming.value
+  const val = isStreaming.value || isThinking.value
   console.log('[NewTaskPage] thinking computed:', val)
   return val
 })
+
+// 思考块折叠状态：记录每个消息 index 的折叠状态
+const thinkingCollapsed = ref<Record<number, boolean>>({})
+
+const toggleThinking = (index: number): void => {
+  thinkingCollapsed.value[index] = !thinkingCollapsed.value[index]
+}
+
+const isLastAssistant = (index: number): boolean => {
+  for (let i = messages.value.length - 1; i >= 0; i--) {
+    if (messages.value[i].role === 'assistant') {
+      return i === index
+    }
+  }
+  return false
+}
 
 // ── Constants ──
 const categories = [
@@ -372,26 +391,36 @@ watch(
               <circle cx="29.5" cy="19" r="1.2" fill="#0e7490" />
             </svg>
           </div>
-          <div :class="['chat-bubble', { 'chat-bubble--user': msg.role === 'user' }]">
-            {{ msg.content }}
+          <div class="chat-bubble-wrapper">
+            <!-- 深度思考块 -->
+            <div v-if="msg.reasoning" class="thinking-block">
+              <button class="thinking-header" @click="toggleThinking(i)">
+                <span class="thinking-header-text">深度思考</span>
+                <svg
+                  :class="['thinking-chevron', { 'thinking-chevron--collapsed': thinkingCollapsed[i] }]"
+                  width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              <Transition name="thinking-collapse">
+                <div v-show="!thinkingCollapsed[i]" class="thinking-body">
+                  <MessageContent :content="msg.reasoning" content-type="markdown" />
+                </div>
+              </Transition>
+            </div>
+            <!-- 消息内容：有内容时渲染，空内容+流式输出时显示加载动画 -->
+            <div v-if="msg.content" :class="['chat-bubble', { 'chat-bubble--user': msg.role === 'user' }]">
+              <MessageContent :content="msg.content" content-type="markdown" />
+            </div>
+            <div v-else-if="isLastAssistant(i) && thinking" class="chat-bubble thinking-bubble">
+              <span class="dot-pulse" style="animation-delay: 0s"></span>
+              <span class="dot-pulse" style="animation-delay: 0.15s"></span>
+              <span class="dot-pulse" style="animation-delay: 0.3s"></span>
+            </div>
           </div>
           <div v-if="msg.role === 'user'" class="chat-avatar chat-avatar--user">鸾</div>
-        </div>
-        <!-- Thinking indicator -->
-        <div v-if="thinking" class="chat-bubble-row">
-          <div class="chat-avatar chat-avatar--ai">
-            <svg width="20" height="20" viewBox="0 0 64 64" fill="none">
-              <ellipse cx="32" cy="38" rx="12" ry="14" fill="#0891b2" />
-              <circle cx="32" cy="20" r="9" fill="#0891b2" />
-              <circle cx="29" cy="19" r="2.5" fill="white" />
-              <circle cx="29.5" cy="19" r="1.2" fill="#0e7490" />
-            </svg>
-          </div>
-          <div class="chat-bubble thinking-bubble">
-            <span class="dot-pulse" style="animation-delay: 0s"></span>
-            <span class="dot-pulse" style="animation-delay: 0.15s"></span>
-            <span class="dot-pulse" style="animation-delay: 0.3s"></span>
-          </div>
         </div>
         <div ref="bottomRef"></div>
       </div>
@@ -993,7 +1022,6 @@ watch(
 }
 
 .chat-bubble {
-  max-width: 70%;
   padding: 12px 16px;
   border-radius: 18px;
   font-size: 14px;
@@ -1010,7 +1038,86 @@ watch(
   border-bottom-right-radius: 4px;
 }
 
-/* Thinking bubble */
+/* Chat bubble wrapper (for reasoning + content layout) */
+.chat-bubble-wrapper {
+  max-width: 70%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Thinking / Reasoning Block (深度思考)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.thinking-block {
+  border-radius: 14px 14px 4px 4px;
+  background: rgba(8, 145, 178, 0.04);
+  border: 1px solid rgba(8, 145, 178, 0.12);
+  border-left: 3px solid #0891b2;
+  overflow: hidden;
+}
+
+.thinking-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  color: #0891b2;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease;
+}
+
+.thinking-header:hover {
+  background: rgba(8, 145, 178, 0.06);
+}
+
+.thinking-header-text {
+  flex: 1;
+  text-align: left;
+}
+
+.thinking-chevron {
+  flex-shrink: 0;
+  color: #0891b2;
+  transition: transform 0.2s ease;
+}
+
+.thinking-chevron--collapsed {
+  transform: rotate(-90deg);
+}
+
+.thinking-body {
+  padding: 6px 14px 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #4b5563;
+  border-top: 1px solid rgba(8, 145, 178, 0.06);
+}
+
+/* Thinking collapse transition */
+.thinking-collapse-enter-active,
+.thinking-collapse-leave-active {
+  transition:
+    opacity 0.2s ease,
+    max-height 0.25s ease;
+  overflow: hidden;
+}
+
+.thinking-collapse-enter-from,
+.thinking-collapse-leave-to {
+  opacity: 0;
+  max-height: 0;
+}
+
+/* Thinking bubble (loading dots) */
 .thinking-bubble {
   display: flex;
   align-items: center;

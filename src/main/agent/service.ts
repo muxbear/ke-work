@@ -17,13 +17,25 @@ export async function invokeSendMessage(
 
   let chunkCount = 0
   for await (const chunk of events.messages) {
+    // 先处理 reasoning（深度思考）流
+    let reasoningCount = 0
+    for await (const token of chunk.reasoning) {
+      reasoningCount++
+      win.webContents.send('agent:stream-thinking', token)
+    }
+    if (reasoningCount > 0) {
+      console.log('[service] reasoning done, tokens:', reasoningCount)
+      win.webContents.send('agent:stream-thinking-done')
+    }
+
+    // 再处理 text（正式回复）流
     let textCount = 0
     for await (const text of chunk.text) {
       textCount++
       chunkCount++
       win.webContents.send('agent:stream-chunk', text)
     }
-    console.log('[service] message chunk done, text pieces:', textCount)
+    console.log('[service] message chunk done, text pieces:', textCount, 'reasoning pieces:', reasoningCount)
   }
 
   console.log('[service] all messages done, total text chunks sent:', chunkCount)
