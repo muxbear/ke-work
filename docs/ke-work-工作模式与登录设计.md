@@ -817,3 +817,53 @@ Renderer: workModeStore.mode = 'cloud'
 - 登录表单验证（手机号格式、密码长度、验证码）
 - IPC 调用超时和错误处理
 - SQLite migration 脚本正确性
+
+---
+
+## 12. 实施补充（迭代落地确认）
+
+### 12.1 模式切换 IPC（mode:set 事务性）
+
+```
+渲染层 setMode('cloud')
+  │
+  ▼
+IPC mode:set
+  1. agentManager.switchMode('cloud')   // 先构建新模式的 Agent；失败即回滚（不执行后续）
+  2. modeStore.setMode('cloud')         // 持久化 work-mode.json
+  3. dataSourceFactory.setMode('cloud') // 工厂切换（通知观察者）
+  4. authService.logout()               // 清除登录态（需重新登录）
+```
+
+**失败回滚语义**：Agent 构建失败时，持久化与工厂切换均不执行，模式保持原值。
+
+### 12.2 环境变量（测试隔离/多实例）
+
+| 变量 | 作用 |
+|------|------|
+| `KE_WORK_HOME` | 覆盖数据基础目录（默认 `~/.ke-work`） |
+| `KE_WORK_USER_DATA` | 覆盖 Electron userData（localStorage 等隔离） |
+
+### 12.3 数据目录最终结构
+
+```
+~/.ke-work/
+├── ke-work.db          # SQLite 数据库（users/conversations/messages/config/audit_logs/sms_codes）
+├── config/
+│   ├── work-mode.json  # 工作模式持久化（独立于数据库）
+│   └── secrets.bin     # safeStorage 加密的密钥（JWT secret 等）
+├── conversations/      # 对话历史（Agent checkpointer 相关）
+├── workspace/          # Agent FilesystemBackend 工作区
+├── logs/               # 应用日志
+└── cache/              # 缓存
+```
+
+### 12.4 验证码存储（迁移 v2）
+
+`sms_codes` 表：`mobile` PK、`code_hash`（SHA-256）、`expires_at`（5 分钟 TTL）、`used`（一次性标记）。
+
+### 12.5 云端 401 语义
+
+- 已登录请求（带 token）401 → 单飞刷新重试一次；刷新失败或重试仍 401 → 会话过期
+- 登录请求 401 → 透传服务端错误消息（如"账号或密码错误"）
+- 重试保护：`unauthorizedRetried` 标记防止刷新-401 无限循环
