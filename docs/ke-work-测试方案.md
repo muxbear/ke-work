@@ -426,3 +426,28 @@ tests/
 | 安全：bcrypt 哈希/JWT/token 仅存哈希/防暴力锁定/验证码一次性/注入防护 | ✅ |
 | 健壮性：大数据量/重复登录/并发写入 | ✅ |
 | 迭代循环 5 轮完成，设计文档与实现同步 | ✅ |
+
+### 迭代 6（2026-08-01）— 生产缺陷修复：会话创建外键失败
+
+**用户报告**: 登录 wangke 后新建任务发消息，无任何回复（静默失败）。
+
+**根因链**（系统化调试定位）:
+1. 直接根因: `preload/index.ts` 的 `createConversation()` 硬编码传 `userId=''`（迭代 4 临时 hack）
+2. 真实迁移含 `FOREIGN KEY (user_id) REFERENCES users(id)`（migrations v1）+ `foreign_keys=ON` → 空 userId 违反外键 → 会话创建失败
+3. `agentStore.sendMessage` 在 `ensureConversation()` 处 reject → NewTaskPage 调用无 catch → UI 完全无反应
+
+**为什么测试没测出来**（测试设计缺陷）:
+1. **E2E-05 通过的假象**: `setup-test-data.mjs` 建表 SQL 省略全部外键约束（0 处 FOREIGN KEY）→ E2E 环境与真实迁移表结构不一致，空 userId 插入成功
+2. 单测用 mock window.api，不经过真实 IPC/外键
+3. 无 "preload 契约 → IPC → 真实 Repository" 的契约集成测试（userId 语义断层无测试锚点）
+
+**修复**:
+1. 新增 `SessionService`（持久化当前登录用户到 `~/.ke-work/config/session.json`，重启恢复）
+2. `conversation:create` 的 userId 由主进程 session 注入（不信任渲染层传参，防外键/越权）
+3. 登录成功设置 session、登出/模式切换清除
+4. 防御: NewTaskPage sendMessage 失败时恢复输入内容（不再静默）
+5. E2E 脚本补全外键约束（与真实迁移一致）
+
+**验证**: 复现测试（userId='' 外键失败）✓、契约测试（未登录拒绝/注入真实 userId）✓、SessionService 持久化恢复 ✓、真实 wangke 用户会话创建 ✓、E2E 4 个全过 ✓
+
+**用例数**: 144（+9 新增：SessionService 5、契约 2、复现 2）+ 4 E2E
