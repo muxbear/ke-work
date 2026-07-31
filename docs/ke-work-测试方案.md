@@ -354,3 +354,21 @@ tests/
   4. 短信/微信登录：未注册账号自动注册（username=手机号 / wx_<hash>）
 - **测试方案变更**: 新增用例 SEC-09（token 仅存哈希）、AUTH-10（登出）、DSF-04（auth repository）
 - **过程改进**: `git add -A` 误提交 coverage 产物 → coverage 加入 .gitignore；提交前必须跑 typecheck
+
+### 迭代 3（2026-07-31）
+
+- **用例数**: 100（迭代 2 的 72 + 迭代 3 新增 28），全部通过
+- **覆盖率**: 语句 90.75% / 分支 87.2% / 函数 81.53% / 行 92%
+- **类型检查**: node + web 均通过
+- **缺陷**: 5 个，均已修复
+  1. **关键设计缺陷**：401 刷新重试无限循环——刷新后重试仍 401 会再次刷新（单飞保护在 finally 释放导致）。修复：`unauthorizedRetried` 标记在重试期间保持，重试完成才重置，每个请求最多刷新重试一次
+  2. 401 语义细分：登录请求（无 token）的 401 是凭证错误应透传服务端消息；已登录请求的 401 才是会话过期
+  3. IPC 测试 fake 缺陷：fake `invoke` 未模拟 Electron 的 event 首参，导致 handler 参数错位
+  4. 类型声明重复：env.d.ts 与 preload/index.d.ts 各声明一份 Window.api → 重构为 preload 导出 `KeWorkWindowApi`，env.d.ts 引用
+  5. CloudDataSource 拦截器泛型 T 未定义 + AxiosResponse 类型
+- **设计变更**:
+  1. 云端 API 契约定稿（/api/auth/*、/api/conversations/*、/api/config/*，统一 `{code, data}` 包裹）
+  2. CloudAuthRepository 中服务端管理的状态（失败计数/锁定/token 哈希）实现为 no-op 适配器
+  3. 主进程装配：WorkModeStore → DataSourceFactory → ElectronSafeStorage(jwt-secret) → AuthService → registerAuthHandlers
+  4. preload 暴露 auth:* 五个通道；`IpcResult<T>` 统一结果包裹
+- **测试方案变更**: 新增 IPC-04（成功路径）、DSF 云端创建/未配置报错用例；REN 用例确认 store 层（组件级留待迭代 5 E2E）
