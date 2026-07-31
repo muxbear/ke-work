@@ -9,6 +9,10 @@ import { LocalDataSource } from './local/LocalDataSource'
 import { LocalConfigRepository } from './local/LocalConfigRepository'
 import { LocalConversationRepository } from './local/LocalConversationRepository'
 import { LocalAuthRepository } from './local/LocalAuthRepository'
+import { CloudDataSource, type CloudTokenStore } from './cloud/CloudDataSource'
+import { CloudAuthRepository } from './cloud/CloudAuthRepository'
+import { CloudConversationRepository } from './cloud/CloudConversationRepository'
+import { CloudConfigRepository } from './cloud/CloudConfigRepository'
 
 /**
  * 数据源工厂（单例 + 工厂 + 观察者）
@@ -20,6 +24,8 @@ export class DataSourceFactory {
   private mode: WorkMode = 'local'
   private localDbPath = join(homedir(), '.ke-work', 'ke-work.db')
   private localDataSource: LocalDataSource | null = null
+  private cloudDataSource: CloudDataSource | null = null
+  private cloudBaseUrl = ''
   private readonly emitter = new EventEmitter()
 
   private constructor() {}
@@ -37,8 +43,9 @@ export class DataSourceFactory {
   }
 
   /** 运行时配置（应用启动时调用） */
-  configure(options: { localDbPath?: string }): void {
+  configure(options: { localDbPath?: string; cloudBaseUrl?: string }): void {
     if (options.localDbPath) this.localDbPath = options.localDbPath
+    if (options.cloudBaseUrl) this.cloudBaseUrl = options.cloudBaseUrl
   }
 
   getMode(): WorkMode {
@@ -57,24 +64,44 @@ export class DataSourceFactory {
     return () => this.emitter.off('mode:changed', listener)
   }
 
+  /** 注入云端 token 提供器（登录后设置） */
+  setCloudTokenStore(store: CloudTokenStore): void {
+    this.getCloudDataSource().setTokenStore(store)
+  }
+
+  /** 注入云端 401 刷新回调（返回 true 表示刷新成功） */
+  setCloudUnauthorizedHandler(handler: () => Promise<boolean>): void {
+    this.getCloudDataSource().setUnauthorizedHandler(handler)
+  }
+
+  getCloudDataSource(): CloudDataSource {
+    if (!this.cloudDataSource) {
+      if (!this.cloudBaseUrl) {
+        throw new Error('cloudBaseUrl not configured. Call configure({ cloudBaseUrl }) first.')
+      }
+      this.cloudDataSource = new CloudDataSource({ baseUrl: this.cloudBaseUrl })
+    }
+    return this.cloudDataSource
+  }
+
   // ── Repository 工厂方法（Strategy）──
 
   createConfigRepository(): IConfigRepository {
     return this.mode === 'local'
       ? new LocalConfigRepository(this.getLocalDataSource())
-      : (this.createCloudRepository('config') as IConfigRepository)
+      : new CloudConfigRepository(this.getCloudDataSource())
   }
 
   createConversationRepository(): IConversationRepository {
     return this.mode === 'local'
       ? new LocalConversationRepository(this.getLocalDataSource())
-      : (this.createCloudRepository('conversation') as IConversationRepository)
+      : new CloudConversationRepository(this.getCloudDataSource())
   }
 
   createAuthRepository(): IAuthRepository {
     return this.mode === 'local'
       ? new LocalAuthRepository(this.getLocalDataSource())
-      : (this.createCloudRepository('auth') as IAuthRepository)
+      : new CloudAuthRepository(this.getCloudDataSource())
   }
 
   private getLocalDataSource(): LocalDataSource {
@@ -84,14 +111,10 @@ export class DataSourceFactory {
     return this.localDataSource
   }
 
-  /** 云端实现占位：迭代 3 替换为真实 CloudRepository */
-  private createCloudRepository(_kind: string): unknown {
-    throw new Error(`cloud repository not implemented yet (kind=${_kind})`)
-  }
-
   /** 释放资源（应用退出/测试清理时调用） */
   close(): void {
     this.localDataSource?.close()
     this.localDataSource = null
+    this.cloudDataSource = null
   }
 }

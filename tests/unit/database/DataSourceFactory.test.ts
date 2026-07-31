@@ -32,9 +32,19 @@ describe('DataSourceFactory', () => {
     expect(factory.createAuthRepository().constructor.name).toBe('LocalAuthRepository')
   })
 
-  it('DSF-03: cloud 模式可切换（云端实现迭代 3 提供）', () => {
+  it('DSF-03: cloud 模式创建 Cloud 实现', () => {
+    factory.configure({ cloudBaseUrl: 'https://api.example.com' })
     factory.setMode('cloud')
-    expect(factory.getMode()).toBe('cloud')
+    expect(factory.createAuthRepository().constructor.name).toBe('CloudAuthRepository')
+    expect(factory.createConfigRepository().constructor.name).toBe('CloudConfigRepository')
+    expect(factory.createConversationRepository().constructor.name).toBe(
+      'CloudConversationRepository'
+    )
+  })
+
+  it('cloud 模式未配置 baseUrl 抛错', () => {
+    factory.setMode('cloud')
+    expect(() => factory.createAuthRepository()).toThrow(/cloudBaseUrl/)
   })
 
   it('WM-04: setMode 通知订阅者且能获取对应实现', () => {
