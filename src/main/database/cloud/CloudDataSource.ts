@@ -65,8 +65,10 @@ export class CloudDataSource {
       },
       async (error: AxiosError) => {
         if (error.response?.status === 401) {
-          if (this.onUnauthorized && !this.unauthorizedRetried) {
-            // 刷新一次并重试；重试期间保持标记，重试请求若仍 401 直接抛错
+          const hasToken = Boolean(this.tokenStore?.getAccessToken())
+          if (this.onUnauthorized && hasToken && !this.unauthorizedRetried) {
+            // 已登录请求的 401 = token 过期：刷新一次并重试；重试期间保持标记，
+            // 重试请求若仍 401 直接抛会话过期（防止无限刷新循环）
             this.unauthorizedRetried = true
             const refreshed = await this.retryOnce()
             if (refreshed) {
@@ -78,8 +80,11 @@ export class CloudDataSource {
               })
             }
             this.unauthorizedRetried = false
+            throw new CloudApiError('登录已过期，请重新登录', 401)
           }
-          throw new CloudApiError('登录已过期，请重新登录', 401)
+          // 登录请求/无刷新器/重试后仍 401：透传服务端错误消息（如凭证错误）
+          const body = error.response.data as { message?: string; code?: number } | undefined
+          throw new CloudApiError(body?.message ?? '登录已过期，请重新登录', 401, body?.code)
         }
         if (error.response) {
           const body = error.response.data as { message?: string; code?: number } | undefined
