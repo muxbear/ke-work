@@ -1,9 +1,36 @@
 import type { BrowserWindow } from 'electron'
-import agent from './agent'
+import type { BaseMessage } from '@langchain/core/messages'
+import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
+import type { DeepAgent } from 'deepagents'
+import type { ConversationMessage } from './ConversationStore'
+
+/** 图运行上下文（thread 与用户隔离） */
+export interface AgentRunConfig {
+  thread_id: string
+  user_id: string
+}
+
+/** 会话消息转 LangChain 消息（带 DB/checkpoint id，addMessages reducer 按 id 去重防重复累积） */
+export function toLangChainMessages(messages: ConversationMessage[]): BaseMessage[] {
+  return messages.map((m) => {
+    switch (m.role) {
+      case 'user':
+        return new HumanMessage({ id: m.id, content: m.content })
+      case 'assistant':
+        return new AIMessage({ id: m.id, content: m.content })
+      case 'tool':
+        return new ToolMessage({ id: m.id, content: m.content, tool_call_id: m.id })
+      case 'system':
+        return new SystemMessage({ id: m.id, content: m.content })
+    }
+  })
+}
 
 export async function invokeSendMessage(
-  messages: Array<{ role: string; content: string }>,
+  messages: BaseMessage[],
   win: BrowserWindow,
+  agent: DeepAgent,
+  config: AgentRunConfig,
   signal?: AbortSignal
 ): Promise<void> {
   console.log('[service] invokeSendMessage called, messages count:', messages.length)
@@ -11,7 +38,7 @@ export async function invokeSendMessage(
 
   const events = await agent.streamEvents(
     { messages },
-    { version: 'v3', signal }
+    { version: 'v3', signal, configurable: { thread_id: config.thread_id, user_id: config.user_id } }
   )
   console.log('[service] streamEvents returned, type:', typeof events, 'has messages:', 'messages' in events)
 

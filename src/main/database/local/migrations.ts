@@ -22,28 +22,6 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at    INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS conversations (
-  id         TEXT PRIMARY KEY,
-  user_id    TEXT NOT NULL,
-  title      TEXT NOT NULL DEFAULT '新对话',
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_conv_user ON conversations(user_id, updated_at DESC);
-
-CREATE TABLE IF NOT EXISTS messages (
-  id              TEXT PRIMARY KEY,
-  conversation_id TEXT NOT NULL,
-  role            TEXT NOT NULL CHECK (role IN ('user','assistant','tool','system')),
-  content         TEXT NOT NULL DEFAULT '',
-  reasoning       TEXT,
-  metadata        TEXT,
-  created_at      INTEGER NOT NULL,
-  FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages(conversation_id, created_at);
-
 CREATE TABLE IF NOT EXISTS config (
   key        TEXT PRIMARY KEY,
   value      TEXT NOT NULL,
@@ -72,6 +50,14 @@ CREATE TABLE IF NOT EXISTS sms_codes (
   used       INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL
 );
+`
+  },
+  {
+    // 会话数据迁移至 LangGraph checkpointer（长短期记忆统一走 LangChain 方案），删除废弃表
+    version: 3,
+    sql: `
+DROP TABLE IF EXISTS messages;
+DROP TABLE IF EXISTS conversations;
 `
   }
 ]

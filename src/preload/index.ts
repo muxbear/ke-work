@@ -5,9 +5,10 @@ import { electronAPI } from '@electron-toolkit/preload'
 const api = {
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
   sendAgentMessage(
-    messages: Array<{ role: string; content: string }>
+    conversationId: string,
+    content: string
   ): Promise<{ success: boolean; error?: string }> {
-    return ipcRenderer.invoke('agent:send', messages) as Promise<{
+    return ipcRenderer.invoke('agent:send', conversationId, content) as Promise<{
       success: boolean
       error?: string
     }>
@@ -53,27 +54,15 @@ const api = {
   logout(account: string) {
     return ipcRenderer.invoke('auth:logout', account)
   },
-  // ── 会话 API ──
+  // ── 会话 API（基于 LangGraph checkpointer）──
   listConversations() {
     return ipcRenderer.invoke('conversation:list')
-  },
-  createConversation(title: string) {
-    return ipcRenderer.invoke('conversation:create', '', title)
   },
   getConversation(id: string) {
     return ipcRenderer.invoke('conversation:get', id)
   },
-  updateConversationTitle(id: string, title: string) {
-    return ipcRenderer.invoke('conversation:update', id, title)
-  },
   deleteConversation(id: string) {
     return ipcRenderer.invoke('conversation:delete', id)
-  },
-  addConversationMessage(
-    id: string,
-    msg: { role: string; content: string; reasoning?: string }
-  ) {
-    return ipcRenderer.invoke('conversation:add-message', id, msg)
   },
   // ── 工作模式 API ──
   getWorkMode() {

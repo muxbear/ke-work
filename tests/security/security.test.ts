@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { LocalDataSource } from '../../src/main/database/local/LocalDataSource'
 import { LocalAuthRepository } from '../../src/main/database/local/LocalAuthRepository'
-import { LocalConversationRepository } from '../../src/main/database/local/LocalConversationRepository'
 import { LocalConfigRepository } from '../../src/main/database/local/LocalConfigRepository'
 import { hashPassword, sha256 } from '../../src/main/security/crypto'
+import { SqliteStore } from '../../src/main/agent/SqliteStore'
 
 /**
  * 安全专项（测试方案 §6 OWASP 映射）
@@ -12,13 +12,11 @@ import { hashPassword, sha256 } from '../../src/main/security/crypto'
 describe('SQL 注入防护', () => {
   let ds: LocalDataSource
   let authRepo: LocalAuthRepository
-  let convRepo: LocalConversationRepository
   let configRepo: LocalConfigRepository
 
   beforeEach(() => {
     ds = new LocalDataSource(':memory:')
     authRepo = new LocalAuthRepository(ds)
-    convRepo = new LocalConversationRepository(ds)
     configRepo = new LocalConfigRepository(ds)
     ds.getDb()
       .prepare(
@@ -38,11 +36,14 @@ describe('SQL 注入防护', () => {
     expect(tables).toBeTruthy()
   })
 
-  it('注入式会话标题：存储后按字面值读取', async () => {
+  it('注入式长期记忆：namespace/key 按字面值处理，不执行注入', async () => {
     const injection = "x' OR '1'='1"
-    const conv = await convRepo.create({ userId: 'u1', title: injection })
-    const found = await convRepo.findById(conv.id)
-    expect(found!.title).toBe(injection)
+    const store = new SqliteStore(':memory:')
+    await store.setup()
+    await store.put(['ns'], injection, { title: injection })
+    const found = await store.get(['ns'], injection)
+    expect(found!.value).toEqual({ title: injection })
+    await store.stop()
   })
 
   it('注入式配置键：读写均按字面值', async () => {

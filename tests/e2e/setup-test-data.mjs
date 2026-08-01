@@ -15,7 +15,6 @@ if (!dataHome) {
 }
 
 mkdirSync(join(dataHome, 'config'), { recursive: true })
-mkdirSync(join(dataHome, 'conversations'), { recursive: true })
 mkdirSync(join(dataHome, 'logs'), { recursive: true })
 mkdirSync(join(dataHome, 'cache'), { recursive: true })
 mkdirSync(join(dataHome, 'workspace'), { recursive: true })
@@ -37,24 +36,6 @@ CREATE TABLE IF NOT EXISTS users (
   locked_until INTEGER,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS conversations (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  title TEXT NOT NULL DEFAULT '新对话',
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-CREATE TABLE IF NOT EXISTS messages (
-  id TEXT PRIMARY KEY,
-  conversation_id TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('user','assistant','tool','system')),
-  content TEXT NOT NULL DEFAULT '',
-  reasoning TEXT,
-  metadata TEXT,
-  created_at INTEGER NOT NULL,
-  FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS config (
   key TEXT PRIMARY KEY,

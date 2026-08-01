@@ -1,10 +1,10 @@
 import { createDeepAgent, FilesystemBackend, StoreBackend } from 'deepagents'
 import type { SubAgent, DeepAgent } from 'deepagents'
-import { InMemoryStore } from '@langchain/langgraph'
 import { SqliteSaver } from '@langchain/langgraph-checkpoint-sqlite'
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres'
 import { PostgresStore } from '@langchain/langgraph-checkpoint-postgres/store'
 import type { WorkMode } from '../mode/work-mode'
+import { SqliteStore } from './SqliteStore'
 
 /** 云端 PostgreSQL 连接串（生产环境经 secure-storage 读取） */
 const cloudPostgresConnString = process.env.CLOUD_POSTGRES_CONN_STRING ?? ''
@@ -18,7 +18,7 @@ function createBackend(mode: WorkMode, workspaceDir: string) {
     })
   }
   return new StoreBackend({
-    // 按用户身份隔离命名空间（user id 经运行时上下文注入）
+    // 按用户身份隔离命名空间（user id 经 agent:send 的 configurable.user_id 注入）
     namespace: (context) => [String(context.config?.configurable?.user_id ?? 'default')]
   })
 }
@@ -30,10 +30,10 @@ function createCheckpointer(mode: WorkMode, dbPath: string) {
     : PostgresSaver.fromConnString(cloudPostgresConnString)
 }
 
-/** 按工作模式创建长期记忆（Store） */
-async function createStore(mode: WorkMode) {
+/** 按工作模式创建长期记忆（Store）：local 用 SqliteStore（参考 PostgresStore 移植），cloud 用 PostgresStore */
+async function createStore(mode: WorkMode, storeDbPath: string) {
   if (mode === 'local') {
-    return new InMemoryStore()
+    return SqliteStore.fromConnString(storeDbPath)
   }
   const store = PostgresStore.fromConnString(cloudPostgresConnString)
   await store.setup()
@@ -45,11 +45,13 @@ export class AgentBuilder {
   private mode: WorkMode
   private config: Record<string, unknown> = {}
   private storePromise: Promise<unknown> | null = null
+  private checkpointer: unknown = null
 
   constructor(
     mode: WorkMode,
     private readonly workspaceDir: string,
-    private readonly checkpointDbPath: string
+    private readonly checkpointDbPath: string,
+    private readonly storeDbPath: string
   ) {
     this.mode = mode
   }
@@ -66,9 +68,15 @@ export class AgentBuilder {
    */
   withModeDefaults(): this {
     this.config.backend = createBackend(this.mode, this.workspaceDir)
-    this.config.checkpointer = createCheckpointer(this.mode, this.checkpointDbPath)
-    this.storePromise = createStore(this.mode)
+    this.checkpointer = createCheckpointer(this.mode, this.checkpointDbPath)
+    this.config.checkpointer = this.checkpointer
+    this.storePromise = createStore(this.mode, this.storeDbPath)
     return this
+  }
+
+  /** 当前 checkpointer（供 ConversationStore 会话读写使用；mode 切换后指向新实例） */
+  getCheckpointer(): unknown {
+    return this.checkpointer
   }
 
   setModel(model: string): this {
@@ -142,7 +150,8 @@ export class AgentBuilder {
 export function createAgentBuilder(
   mode: WorkMode,
   workspaceDir: string,
-  checkpointDbPath: string
+  checkpointDbPath: string,
+  storeDbPath: string
 ): AgentBuilder {
-  return new AgentBuilder(mode, workspaceDir, checkpointDbPath).withModeDefaults()
+  return new AgentBuilder(mode, workspaceDir, checkpointDbPath, storeDbPath).withModeDefaults()
 }

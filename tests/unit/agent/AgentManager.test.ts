@@ -38,13 +38,6 @@ vi.mock('@langchain/langgraph-checkpoint-postgres/store', () => ({
     async setup() {}
   }
 }))
-vi.mock('@langchain/langgraph', () => ({
-  InMemoryStore: class {
-    constructor() {
-      return { kind: 'InMemoryStore' }
-    }
-  }
-}))
 
 import { AgentManager } from '../../../src/main/agent/AgentManager'
 
@@ -55,24 +48,39 @@ describe('AgentManager', () => {
   beforeEach(() => {
     workDir = mkdtempSync(join(tmpdir(), 'kw-am-'))
     createDeepAgentMock.mockClear()
-    manager = new AgentManager(workDir, join(workDir, 'checkpoints.sqlite'))
+    manager = new AgentManager(
+      workDir,
+      join(workDir, 'checkpoints.sqlite'),
+      join(workDir, 'store.sqlite')
+    )
   })
 
-  it('AG-06a: init 后 getAgent 返回实例', async () => {
+  it('AG-06a: init 后 ready 返回 agent 实例', async () => {
     await manager.init('local')
-    expect(manager.getAgent()).not.toBeNull()
+    const agent = await manager.ready()
+    expect(agent).not.toBeNull()
   })
 
   it('AG-06b: 模式切换重建 agent，保留自定义配置', async () => {
     await manager.init('local')
-    const first = manager.getAgent()
+    const first = await manager.ready()
     manager.setModel('deepseek:deepseek-v4-pro').setSkills(['/skills/'])
     await manager.switchMode('cloud')
-    const second = manager.getAgent()
+    const second = await manager.ready()
     expect(second).not.toBe(first)
     const config = createDeepAgentMock.mock.calls[1][0] as Record<string, never>
     expect(config.model).toBe('deepseek:deepseek-v4-pro')
     expect((config.checkpointer as { kind: string }).kind).toBe('PostgresSaver')
+  })
+
+  it('AG-06c: switchMode 后 getCheckpointer 指向新实例', async () => {
+    await manager.init('local')
+    const localCp = manager.getCheckpointer()
+    expect((localCp as unknown as { kind: string }).kind).toBe('SqliteSaver')
+    await manager.switchMode('cloud')
+    const cloudCp = manager.getCheckpointer()
+    expect((cloudCp as unknown as { kind: string }).kind).toBe('PostgresSaver')
+    expect(cloudCp).not.toBe(localCp)
   })
 
   it('AG-07: 未 init 时 switchMode 抛错', async () => {

@@ -3,15 +3,12 @@ import { join } from 'path'
 import { homedir } from 'os'
 import type { WorkMode } from '../mode/work-mode'
 import type { IConfigRepository } from './interfaces/IConfigRepository'
-import type { IConversationRepository } from './interfaces/IConversationRepository'
 import type { IAuthRepository } from './interfaces/IAuthRepository'
 import { LocalDataSource } from './local/LocalDataSource'
 import { LocalConfigRepository } from './local/LocalConfigRepository'
-import { LocalConversationRepository } from './local/LocalConversationRepository'
 import { LocalAuthRepository } from './local/LocalAuthRepository'
 import { CloudDataSource, type CloudTokenStore } from './cloud/CloudDataSource'
 import { CloudAuthRepository } from './cloud/CloudAuthRepository'
-import { CloudConversationRepository } from './cloud/CloudConversationRepository'
 import { CloudConfigRepository } from './cloud/CloudConfigRepository'
 
 /**
@@ -90,12 +87,6 @@ export class DataSourceFactory {
     return this.mode === 'local'
       ? new LocalConfigRepository(this.getLocalDataSource())
       : new CloudConfigRepository(this.getCloudDataSource())
-  }
-
-  createConversationRepository(): IConversationRepository {
-    return this.mode === 'local'
-      ? new LocalConversationRepository(this.getLocalDataSource())
-      : new CloudConversationRepository(this.getCloudDataSource())
   }
 
   createAuthRepository(): IAuthRepository {

@@ -22,9 +22,6 @@ describe('DataSourceFactory', () => {
   it('DSF-02: local 模式创建 Local 实现', () => {
     factory.setMode('local')
     expect(factory.createConfigRepository().constructor.name).toBe('LocalConfigRepository')
-    expect(factory.createConversationRepository().constructor.name).toBe(
-      'LocalConversationRepository'
-    )
   })
 
   it('DSF-04: auth repository 可创建', () => {
@@ -37,9 +34,6 @@ describe('DataSourceFactory', () => {
     factory.setMode('cloud')
     expect(factory.createAuthRepository().constructor.name).toBe('CloudAuthRepository')
     expect(factory.createConfigRepository().constructor.name).toBe('CloudConfigRepository')
-    expect(factory.createConversationRepository().constructor.name).toBe(
-      'CloudConversationRepository'
-    )
   })
 
   it('cloud 模式未配置 baseUrl 抛错', () => {

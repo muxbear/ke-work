@@ -23,23 +23,12 @@ export interface Conversation {
   updateAt: number
 }
 
-interface ApiConversation {
-  id: string
-  title: string
-  createdAt: number
-  updatedAt: number
-}
-
 /**
- * 生成一条 ID
+ * 生成一条 ID（会话/消息，会话 id 由渲染层生成，主进程按 userId 合成 thread_id）
  * @returns
  */
 function getId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 9)
-}
-
-function toConversation(c: ApiConversation): Conversation {
-  return { id: c.id, title: c.title, createAt: c.createdAt, updateAt: c.updatedAt }
 }
 
 /**
@@ -70,23 +59,28 @@ export const useAgentStore = defineStore('agent', () => {
 
   // ====== 方法(Actions) ======
 
-  /** 启动时从数据源加载会话列表 */
+  /** 启动时从数据源加载会话列表（主进程基于 LangGraph checkpointer 派生） */
   async function loadConversations(): Promise<void> {
     const result = await window.api.listConversations()
     if (result.success && result.data) {
-      conversations.value = result.data.map(toConversation)
+      conversations.value = result.data
     }
     loaded.value = true
   }
 
   /**
    * 创建会话（多轮对话）
+   * 会话数据存于 LangGraph checkpoint（首次发消息时生成），此处仅本地登记
    * @returns
    */
   async function createConversation(): Promise<Conversation> {
-    const result = await window.api.createConversation('新对话')
-    if (!result.success || !result.data) throw new Error(result.error ?? '创建会话失败')
-    const conv = toConversation(result.data)
+    const now = Date.now()
+    const conv: Conversation = {
+      id: getId(),
+      title: '新对话',
+      createAt: now,
+      updateAt: now
+    }
     conversations.value.unshift(conv)
     currentConversationId.value = conv.id
     selectedMessages.value = []
@@ -139,17 +133,6 @@ export const useAgentStore = defineStore('agent', () => {
     }
   }
 
-  /**
-   * 更新会话标题
-   * @param id 会话标识
-   * @param title 会话标题
-   */
-  async function updateConversationTitle(id: string, title: string): Promise<void> {
-    await window.api.updateConversationTitle(id, title)
-    const conv = conversations.value.find((c) => c.id === id)
-    if (conv) conv.title = title
-  }
-
   async function sendMessage(content: string): Promise<void> {
     console.log('[store] sendMessage called with:', content)
     const conv = await ensureConversation()
@@ -161,14 +144,10 @@ export const useAgentStore = defineStore('agent', () => {
     }
 
     selectedMessages.value.push(userMsg)
-    // 用户消息落库
-    await window.api.addConversationMessage(conv.id, { role: 'user', content })
 
-    // 根据用户消息生成会话标题
+    // 根据用户消息生成会话标题（本地；列表重新加载时由主进程从 checkpoint 派生）
     if (selectedMessages.value.length === 1) {
-      const title = content.slice(0, 30) + (content.length > 30 ? '...' : '')
-      await updateConversationTitle(conv.id, title)
-      conv.title = title
+      conv.title = content.slice(0, 30) + (content.length > 30 ? '...' : '')
     }
 
     // 创建一条 AI 消息进行占位
@@ -225,13 +204,9 @@ export const useAgentStore = defineStore('agent', () => {
       )
     ])
 
-    // 构建对话历史（不含空占位的 assistant 消息）
-    const history = selectedMessages.value
-      .filter((m) => m.id !== assistantMsg.id && m.content)
-      .map((m) => ({ role: m.role, content: m.content }))
-
     try {
-      const result = await window.api.sendAgentMessage(history)
+      // 主进程从 checkpoint 读取历史 + 追加本轮消息（会话数据全量由 LangGraph 管理）
+      const result = await window.api.sendAgentMessage(conv.id, content)
       if (!result.success) {
         const msg = getAssistantMsg()
         if (msg) {
@@ -252,16 +227,6 @@ export const useAgentStore = defineStore('agent', () => {
       unlistenChunk()
       isThinking.value = false
       isStreaming.value = false
-
-      // 落库 assistant 消息（含 reasoning）
-      const finalMsg = getAssistantMsg()
-      if (finalMsg) {
-        await window.api.addConversationMessage(conv.id, {
-          role: 'assistant',
-          content: finalMsg.content,
-          reasoning: finalMsg.reasoning
-        })
-      }
       conv.updateAt = Date.now()
     }
   }
@@ -292,7 +257,6 @@ export const useAgentStore = defineStore('agent', () => {
     createConversation,
     deleteConversation,
     batchDeleteConversations,
-    updateConversationTitle,
     loadConversations,
     selectConversation,
     currentMessages,

@@ -7,45 +7,30 @@ function firstCallArg(fn: { mock: { calls: unknown[][] } }): unknown {
   return fn.mock.calls[0]?.[0]
 }
 
-/** 内存版 window.api（仅会话相关） */
+/** 内存版 window.api（仅保留通道；会话数据由 LangGraph checkpointer 管理） */
 function createMockWindowApi() {
   const conversations = new Map<
     string,
-    { id: string; title: string; createdAt: number; updatedAt: number; messages: unknown[] }
+    { id: string; title: string; createAt: number; updateAt: number; messages: unknown[] }
   >()
-  let seq = 0
 
   const api = {
     listConversations: vi.fn(async () => ({
       success: true,
       data: [...conversations.values()].map(({ messages: _m, ...c }) => c)
     })),
-    createConversation: vi.fn(async (title: string) => {
-      const id = `c${++seq}`
-      const conv = { id, title, createdAt: seq, updatedAt: seq, messages: [] }
-      conversations.set(id, conv)
-      return { success: true, data: { id, title, createdAt: seq, updatedAt: seq } }
-    }),
     getConversation: vi.fn(async (id: string) => {
       const conv = conversations.get(id)
-      if (!conv) return { success: true, data: null }
-      return { success: true, data: { ...conv } }
-    }),
-    updateConversationTitle: vi.fn(async (id: string, title: string) => {
-      const conv = conversations.get(id)!
-      conv.title = title
-      return { success: true, data: { ...conv } }
+      if (!conv) return { success: true, data: { id, messages: [] } }
+      return { success: true, data: { id: conv.id, messages: conv.messages } }
     }),
     deleteConversation: vi.fn(async (id: string) => {
       conversations.delete(id)
       return { success: true, data: null }
     }),
-    addConversationMessage: vi.fn(async (id: string, msg: { role: string; content: string }) => {
-      const conv = conversations.get(id)!
-      conv.messages.push({ id: `m${conv.messages.length + 1}`, ...msg })
-      return { success: true, data: { id: `m${conv.messages.length}`, ...msg } }
-    }),
-    sendAgentMessage: vi.fn(async () => ({ success: true })),
+    sendAgentMessage: vi.fn(async (): Promise<{ success: boolean; error?: string }> => ({
+      success: true
+    })),
     cancelAgentMessage: vi.fn(),
     onAgentChunk: vi.fn(() => () => {}),
     onAgentThinking: vi.fn(() => () => {}),
@@ -56,7 +41,7 @@ function createMockWindowApi() {
   return { api, conversations }
 }
 
-describe('useAgentStore（IPC 落库）', () => {
+describe('useAgentStore（会话数据基于 LangGraph checkpoint）', () => {
   let mock: ReturnType<typeof createMockWindowApi>
 
   beforeEach(() => {
@@ -72,24 +57,27 @@ describe('useAgentStore（IPC 落库）', () => {
 
   it('loadConversations 从 IPC 加载会话列表', async () => {
     const store = useAgentStore()
-    await store.createConversation()
-    await store.createConversation()
+    mock.conversations.set('c1', { id: 'c1', title: 'A', createAt: 1, updateAt: 2, messages: [] })
+    mock.conversations.set('c2', { id: 'c2', title: 'B', createAt: 1, updateAt: 3, messages: [] })
     await store.loadConversations()
     expect(store.sortedConversations.length).toBe(2)
+    expect(store.sortedConversations[0].id).toBe('c2') // 按 updateAt 降序
     expect(mock.api.listConversations).toHaveBeenCalled()
   })
 
-  it('createConversation 调用 IPC 并设为当前会话', async () => {
+  it('createConversation 本地生成 id 并设为当前会话（不调 IPC）', async () => {
     const store = useAgentStore()
     const conv = await store.createConversation()
-    expect(mock.api.createConversation).toHaveBeenCalledWith('新对话')
+    expect('createConversation' in mock.api).toBe(false) // 通道已删除，本地创建
     expect(store.currentConversationId).toBe(conv.id)
     expect(store.currentConversation?.title).toBe('新对话')
+    expect(store.sortedConversations).toHaveLength(1)
   })
 
-  it('sendMessage 完整流程：用户消息与 assistant 消息落库、标题生成', async () => {
+  it('sendMessage 完整流程：流式输出、标题本地生成、主进程仅收 conversationId + content', async () => {
     const store = useAgentStore()
     await store.createConversation()
+    const convId = store.currentConversationId!
 
     // 启动 sendMessage（不 await），等待事件监听注册完成后模拟流式事件
     const sendPromise = store.sendMessage('你好世界')
@@ -112,11 +100,23 @@ describe('useAgentStore（IPC 落库）', () => {
     expect(store.currentMessages[0].content).toBe('你好世界')
     expect(store.currentMessages[1].content).toBe('你好，世界！')
     expect(store.currentMessages[1].reasoning).toBe('思考中...')
-    // 落库调用：用户 1 次 + assistant 1 次
-    expect(mock.api.addConversationMessage).toHaveBeenCalledTimes(2)
-    // 标题生成（第一条消息）
+    // 主进程契约：conversationId + content（历史由主进程从 checkpoint 读取）
+    expect(mock.api.sendAgentMessage).toHaveBeenCalledWith(convId, '你好世界')
+    // 标题本地生成（第一条消息）
     expect(store.currentConversation?.title).toBe('你好世界')
-    expect(mock.api.updateConversationTitle).toHaveBeenCalled()
+    // 不再经 IPC 落库
+    expect(mock.api.getConversation).not.toHaveBeenCalled()
+  })
+
+  it('sendMessage 失败时展示错误信息并保持消息流状态', async () => {
+    const store = useAgentStore()
+    await store.createConversation()
+    mock.api.sendAgentMessage.mockResolvedValueOnce({ success: false, error: '请求超时' })
+
+    await store.sendMessage('测试失败')
+
+    expect(store.currentMessages[1].content).toBe('请求超时')
+    expect(store.isStreaming).toBe(false)
   })
 
   it('deleteConversation 同步 IPC 并切换当前会话', async () => {
@@ -135,7 +135,13 @@ describe('useAgentStore（IPC 落库）', () => {
     const store = useAgentStore()
     await store.createConversation()
     const convId = store.currentConversationId!
-    await mock.api.addConversationMessage(convId, { role: 'user', content: '存量消息' })
+    mock.conversations.set(convId, {
+      id: convId,
+      title: '新对话',
+      createAt: 1,
+      updateAt: 1,
+      messages: [{ id: 'm1', role: 'user', content: '存量消息' }]
+    })
 
     await store.selectConversation(convId)
     expect(store.currentMessages).toHaveLength(1)

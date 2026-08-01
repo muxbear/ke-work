@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import MockAdapter from 'axios-mock-adapter'
 import { CloudDataSource } from '../../../src/main/database/cloud/CloudDataSource'
 import { CloudAuthRepository } from '../../../src/main/database/cloud/CloudAuthRepository'
-import { CloudConversationRepository } from '../../../src/main/database/cloud/CloudConversationRepository'
 import { CloudConfigRepository } from '../../../src/main/database/cloud/CloudConfigRepository'
 
 function setup(): { ds: CloudDataSource; mock: MockAdapter } {
@@ -65,50 +64,6 @@ describe('CloudAuthRepository', () => {
     await repo.resetLoginFailures('u1')
     await repo.updateToken('u1', 'h', 1)
     // 以上不抛错即为通过（服务端管理这些状态）
-  })
-})
-
-describe('CloudConversationRepository', () => {
-  let ds: CloudDataSource
-  let mock: MockAdapter
-  let repo: CloudConversationRepository
-
-  beforeEach(() => {
-    ;({ ds, mock } = setup())
-    repo = new CloudConversationRepository(ds)
-  })
-
-  it('findAll 解析会话列表', async () => {
-    mock.onGet('/api/conversations').reply(200, {
-      code: 0,
-      data: [{ id: 'c1', userId: 'u1', title: '对话', createdAt: 1, updatedAt: 2 }]
-    })
-    const list = await repo.findAll()
-    expect(list).toHaveLength(1)
-    expect(list[0].title).toBe('对话')
-  })
-
-  it('create 发送 POST 并返回会话', async () => {
-    mock.onPost('/api/conversations').reply(200, {
-      code: 0,
-      data: { id: 'c2', userId: 'u1', title: '新对话', createdAt: 3, updatedAt: 3 }
-    })
-    const conv = await repo.create({ userId: 'u1', title: '新对话' })
-    expect(conv.id).toBe('c2')
-  })
-
-  it('findById 返回含 messages 的会话', async () => {
-    mock.onGet('/api/conversations/c1').reply(200, {
-      code: 0,
-      data: { id: 'c1', userId: 'u1', title: 't', createdAt: 1, updatedAt: 2, messages: [] }
-    })
-    const found = await repo.findById('c1')
-    expect(found!.messages).toEqual([])
-  })
-
-  it('delete 调 DELETE 接口', async () => {
-    mock.onDelete('/api/conversations/c1').reply(200, { code: 0, data: null })
-    await expect(repo.delete('c1')).resolves.toBeUndefined()
   })
 })
 

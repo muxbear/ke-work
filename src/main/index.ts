@@ -1,8 +1,9 @@
 import { app, shell, BrowserWindow, ipcMain, safeStorage } from 'electron'
 import { join } from 'path'
-import { randomBytes } from 'crypto'
+import { randomBytes, randomUUID } from 'crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import { invokeSendMessage } from './agent/service'
+import { invokeSendMessage, toLangChainMessages } from './agent/service'
+import { HumanMessage } from '@langchain/core/messages'
 import { detectOS } from './platform'
 import { getDataDirectory, initDataDirectory } from './data-dir'
 import { WorkModeStore } from './mode/work-mode'
@@ -12,7 +13,7 @@ import { SessionService } from './services/SessionService'
 import { ElectronSafeStorage } from './security/secure-storage'
 import { registerAuthHandlers } from './ipc/auth-handlers'
 import { AgentManager } from './agent/AgentManager'
-import { ConversationService } from './services/ConversationService'
+import { ConversationStore } from './agent/ConversationStore'
 import { registerConversationHandlers } from './ipc/conversation-handlers'
 import { registerModeHandlers } from './ipc/mode-handlers'
 
@@ -117,15 +118,14 @@ app.whenReady().then(() => {
   // ── 初始化智能体（AgentManager）──
   const agentManager = new AgentManager(
     dataDir.getDir('workspace'),
-    join(dataDir.getBaseDir(), 'checkpoints.sqlite')
+    join(dataDir.getBaseDir(), 'checkpoints.sqlite'),
+    join(dataDir.getBaseDir(), 'store.sqlite')
   )
   agentManager.init(mode).catch((err) => console.error('[main] agent init failed:', err))
 
-  // ── 注册会话 IPC ──
-  const conversationService = new ConversationService(
-    dataSourceFactory.createConversationRepository()
-  )
-  registerConversationHandlers(ipcMain, { conversationService, session })
+  // ── 注册会话 IPC（基于 LangGraph checkpointer 的会话读写）──
+  const conversationStore = new ConversationStore(() => agentManager.getCheckpointer())
+  registerConversationHandlers(ipcMain, { conversationStore, session })
 
   // ── 注册工作模式 IPC ──
   registerModeHandlers(ipcMain, {
@@ -153,19 +153,40 @@ app.whenReady().then(() => {
   // Agent message handler
   ipcMain.handle(
     'agent:send',
-    async (event, messages: Array<{ role: string; content: string }>) => {
-      console.log('[main] agent:send handler, messages count:', messages?.length)
+    async (event, conversationId?: unknown, content?: unknown) => {
+      console.log('[main] agent:send handler, conversationId:', conversationId)
       const win = BrowserWindow.fromWebContents(event.sender)
       if (!win) {
         console.error('[main] No window found for event.sender')
         throw new Error('No window found')
+      }
+      if (typeof conversationId !== 'string' || !conversationId || typeof content !== 'string' || !content) {
+        return { success: false, error: '参数错误' }
       }
 
       const controller = new AbortController()
       abortControllers.set(win.id, controller)
 
       try {
-        await invokeSendMessage(messages, win, controller.signal)
+        // 会话历史（checkpoint 内）+ 本轮新消息；历史带 id，图内 reducer 按 id 去重
+        const userId = session.requireUserId()
+        const [agent, history] = await Promise.all([
+          agentManager.ready(),
+          conversationStore.getMessages(userId, conversationId)
+        ])
+        const messages = toLangChainMessages(history)
+        messages.push(new HumanMessage({ id: `msg-${randomUUID()}`, content }))
+
+        await invokeSendMessage(
+          messages,
+          win,
+          agent,
+          {
+            thread_id: conversationStore.buildThreadId(userId, conversationId),
+            user_id: userId
+          },
+          controller.signal
+        )
         console.log('[main] invokeSendMessage completed, returning success')
         return { success: true }
       } catch (error) {

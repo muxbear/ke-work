@@ -19,9 +19,8 @@ export interface AgentAPI {
     authUrl: string,
     redirectUri: string
   ) => Promise<{ code?: string; error?: string }>
-  sendAgentMessage(
-    messages: Array<{ role: string; content: string }>
-  ): Promise<{ success: boolean; error?: string }>
+  /** 发送消息：conversationId 由渲染层生成，主进程按会话合成 thread_id 并读取历史 */
+  sendAgentMessage(conversationId: string, content: string): Promise<{ success: boolean; error?: string }>
   cancelAgentMessage(): void
   onAgentChunk(callback: (chunk: string) => void): () => void
   onAgentThinking(callback: (chunk: string) => void): () => void
@@ -37,33 +36,25 @@ export interface AuthAPI {
   logout(account: string): Promise<IpcResult<null>>
 }
 
+/** 会话列表项（基于 LangGraph checkpoint 派生：id 为会话 id，标题由首条消息派生） */
 export interface Conversation {
   id: string
-  userId: string
   title: string
-  createdAt: number
-  updatedAt: number
+  createAt: number
+  updateAt: number
 }
 
+/** 会话内消息（checkpoint 不保存 reasoning，历史重开不展示思考过程） */
 export interface ConversationMessage {
   id: string
-  conversationId: string
   role: string
   content: string
-  reasoning?: string
-  createdAt: number
 }
 
 export interface ConversationAPI {
   listConversations(): Promise<IpcResult<Conversation[]>>
-  createConversation(title: string): Promise<IpcResult<Conversation>>
-  getConversation(id: string): Promise<IpcResult<Conversation & { messages: ConversationMessage[] } | null>>
-  updateConversationTitle(id: string, title: string): Promise<IpcResult<Conversation>>
+  getConversation(id: string): Promise<IpcResult<{ id: string; messages: ConversationMessage[] }>>
   deleteConversation(id: string): Promise<IpcResult<null>>
-  addConversationMessage(
-    id: string,
-    msg: { role: string; content: string; reasoning?: string }
-  ): Promise<IpcResult<ConversationMessage>>
 }
 
 export interface ModeAPI {

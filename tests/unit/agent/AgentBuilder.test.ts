@@ -41,35 +41,35 @@ vi.mock('@langchain/langgraph-checkpoint-postgres/store', () => ({
     async setup() {}
   }
 }))
-vi.mock('@langchain/langgraph', () => ({
-  InMemoryStore: class {
-    constructor() {
-      return { kind: 'InMemoryStore' }
-    }
-  }
-}))
 
 import { createAgentBuilder } from '../../../src/main/agent/AgentBuilder'
+import { SqliteStore } from '../../../src/main/agent/SqliteStore'
 
 describe('AgentBuilder', () => {
   let workDir: string
+  let checkpointPath: string
+  let storePath: string
 
   beforeEach(() => {
     workDir = mkdtempSync(join(tmpdir(), 'kw-agent-'))
+    checkpointPath = join(workDir, 'checkpoints.sqlite')
+    storePath = join(workDir, 'store.sqlite')
     createDeepAgentMock.mockClear()
   })
 
-  it('AG-01: local 默认配置（FilesystemBackend + SqliteSaver）', async () => {
-    await createAgentBuilder('local', workDir, join(workDir, 'checkpoints.sqlite'))
+  it('AG-01: local 默认配置（FilesystemBackend + SqliteSaver + SqliteStore）', async () => {
+    await createAgentBuilder('local', workDir, checkpointPath, storePath)
       .setModel('deepseek:deepseek-v4-pro')
       .build()
     const config = createDeepAgentMock.mock.calls[0][0] as Record<string, never>
     expect((config.backend as { opts: { rootDir: string } }).opts.rootDir).toBe(workDir)
     expect((config.checkpointer as { kind: string }).kind).toBe('SqliteSaver')
+    // 长期记忆：local 使用 SQLite 持久化版 SqliteStore（参考 PostgresStore 移植）
+    expect(config.store).toBeInstanceOf(SqliteStore)
   })
 
   it('AG-06: local checkpointer 路径为数据库文件而非工作目录', async () => {
-    await createAgentBuilder('local', workDir, join(workDir, 'checkpoints.sqlite')).setModel('m').build()
+    await createAgentBuilder('local', workDir, checkpointPath, storePath).setModel('m').build()
     const checkpointer = (createDeepAgentMock.mock.calls[0][0] as {
       checkpointer: { kind: string; path: string }
     }).checkpointer
@@ -80,7 +80,7 @@ describe('AgentBuilder', () => {
 
   it('AG-02: cloud 默认配置（PostgresSaver + PostgresStore）', async () => {
     process.env.CLOUD_POSTGRES_CONN_STRING = 'postgres://mock'
-    await createAgentBuilder('cloud', workDir, join(workDir, 'checkpoints.sqlite'))
+    await createAgentBuilder('cloud', workDir, checkpointPath, storePath)
       .setModel('deepseek:deepseek-v4-pro')
       .build()
     const config = createDeepAgentMock.mock.calls[0][0] as Record<string, never>
@@ -91,19 +91,19 @@ describe('AgentBuilder', () => {
 
   it('AG-03: 链式覆盖自定义 backend', async () => {
     const customBackend = { kind: 'custom' }
-    await createAgentBuilder('local', workDir, join(workDir, 'checkpoints.sqlite')).setModel('m').setBackend(customBackend).build()
+    await createAgentBuilder('local', workDir, checkpointPath, storePath).setModel('m').setBackend(customBackend).build()
     const config = createDeepAgentMock.mock.calls[0][0] as { backend: unknown }
     expect(config.backend).toBe(customBackend)
   })
 
   it('AG-04: 未设置模型时 build 不注入 model', async () => {
-    const builder = await createAgentBuilder('local', workDir, join(workDir, 'checkpoints.sqlite'))
+    const builder = await createAgentBuilder('local', workDir, checkpointPath, storePath)
     await builder.build()
     expect((createDeepAgentMock.mock.calls[0][0] as { model?: string }).model).toBeUndefined()
   })
 
   it('AG-05: setMode 保留自定义项，重载默认 backend/记忆', async () => {
-    const builder = await createAgentBuilder('local', workDir, join(workDir, 'checkpoints.sqlite'))
+    const builder = await createAgentBuilder('local', workDir, checkpointPath, storePath)
     builder.setModel('m1').setSkills(['/skills/'])
     await builder.setMode('cloud').withModeDefaults()
     await builder.build()

@@ -85,14 +85,13 @@ describe('E2E 登录全流程', () => {
       timeout: 15_000
     })
 
-    // 重启后校验数据库持久化（消息已落库）
+    // 重启后校验持久化：消息存于 LangGraph checkpoints.sqlite（checkpoints 表 checkpoint 列，JsonPlusSerializer 明文 JSON）
     await app.close()
-    const db = new Database(join(dataHome, 'ke-work.db'))
-    const row = db
-      .prepare("SELECT content FROM messages WHERE content = 'E2E 持久化测试消息'")
-      .get()
+    const db = new Database(join(dataHome, 'checkpoints.sqlite'))
+    const rows = db.prepare('SELECT checkpoint FROM checkpoints').all() as Array<{ checkpoint: Buffer }>
+    const allText = rows.map((r) => r.checkpoint.toString('utf-8')).join('')
     db.close()
-    expect(row).toBeTruthy()
+    expect(allText).toContain('E2E 持久化测试消息')
   }, 90_000)
 
   it('E2E-02b: 残留 token 但主进程会话为空 → 路由守卫拦截回登录页', async () => {
