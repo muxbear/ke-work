@@ -486,3 +486,38 @@ localStorage 残留 token（mock 时代/早期登录）放行路由守卫进入 
 3. E2E-02b 新场景：残留 token + 主进程会话空 → 启动回登录页 ✓
 
 **用例数**: 146 + 6 E2E
+
+### 迭代 7（2026-08-01）— 退出登录功能（确认弹窗 + 停止所有任务）
+
+**需求**: 主页面左下角用户菜单"退出登录"：弹确认窗口
+（"登出后会停止所有正在执行中的任务（包括后台会话），确认要登出吗？"），
+确认后停止所有执行中任务并完成登出。
+
+**实现**:
+1. `Home.vue`：退出按钮 → ConfirmDialog 确认弹窗 → `stopAllTasks()` → `window.api.logout(account)`
+   → 本地清理 → 回登录页；IPC 失败保留登录态 + 菜单内提示可重试
+2. `auth:logout` IPC 联动 `cancelAllAgents()`（abort 全部 AbortController 流）→ 清 token → `session.clear()`
+3. 新增 `agentStore.stopAllTasks()`（重置 isStreaming/isThinking）
+4. 新增 `components/ConfirmDialog.vue` 通用确认弹窗
+5. E2E-04 新场景：登录 → 退出确认弹窗 → 回登录页 → token 与 session.json 清除 → /home 被拦截 ✓
+6. 新增 IPC-05/06/07（auth:logout 成功顺序 / 参数校验 / 异常不清登录态）
+
+**用例数**: 149 单元 + 7 E2E
+
+### 迭代 7b（2026-08-01）— 登录页键盘交互
+
+**需求**: 验证码模式默认聚焦手机号框、手机号/验证码框回车触发登录（已填全时）；
+密码模式默认聚焦账号框、账号/密码框回车触发登录（已填全时）。
+
+**实现**: `Login.vue` 输入框 `@keydown.enter` → 按模式校验 `canLoginSms`/`canLoginPassword`
+后调 `handleLogin`；焦点经 `@vue:mounted` 钩子触发（Transition out-in 动画后元素才挂载，
+watch+nextTick 时机不可靠——迭代 7b 踩坑修正）。
+
+**迭代 7b 修复（用户报告：启动后页面报错）**: 初版用 `@vnode-mounted` 简写，
+Vue 3.4 起已移除该写法，dev 模式 Vite 编译器拒绝编译 Login.vue → 路由动态导入失败 →
+页面报错（生产构建编译器宽松未暴露，E2E 因此未捕获）。改为 `@vue:mounted` 前缀形式修复。
+教训：dev 模式编译错误需用 `npm run dev` 验证，不能只依赖 build + E2E。
+
+**用例**: E2E-06（默认焦点 / tab 切换焦点 / 密码模式回车登录）✓
+
+**用例数**: 149 单元 + 8 E2E

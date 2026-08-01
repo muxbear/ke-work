@@ -28,11 +28,19 @@ if (process.env.KE_WORK_USER_DATA) {
 // 取消控制器映射（按窗口 ID）
 const abortControllers = new Map<number, AbortController>()
 
+/** 取消所有正在执行中的 agent 任务（登出时停止全部任务/后台会话） */
+function cancelAllAgents(): void {
+  for (const controller of abortControllers.values()) {
+    controller.abort()
+  }
+  abortControllers.clear()
+}
+
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+    width: 1024,
+    height: 768,
     show: false,
     autoHideMenuBar: true,
     fullscreenable: true,
@@ -104,13 +112,11 @@ app.whenReady().then(() => {
   const session = new SessionService(dataDir.getDir('config'))
 
   // ── 注册认证 IPC ──
-  registerAuthHandlers(ipcMain, { authService, dataSourceFactory, session })
+  registerAuthHandlers(ipcMain, { authService, dataSourceFactory, session, cancelAllAgents })
 
   // ── 初始化智能体（AgentManager）──
   const agentManager = new AgentManager(dataDir.getDir('workspace'))
-  agentManager
-    .init(mode)
-    .catch((err) => console.error('[main] agent init failed:', err))
+  agentManager.init(mode).catch((err) => console.error('[main] agent init failed:', err))
 
   // ── 注册会话 IPC ──
   const conversationService = new ConversationService(

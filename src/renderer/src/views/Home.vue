@@ -7,6 +7,7 @@ import ProjectPage from './ProjectPage.vue'
 import ExpertPage from './ExpertPage.vue'
 import AutomationPage from './AutomationPage.vue'
 import NewTaskPage from './NewTaskPage.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { useAgentStore } from '@renderer/store/agent'
 
 const router = useRouter()
@@ -105,10 +106,38 @@ const spaces = computed(() => {
   return [...map.entries()]
 })
 
-const handleLogout = (): void => {
-  userMenuOpen.value = false
-  userStore.logout()
-  router.push('/')
+// ── Logout ──
+const showLogoutConfirm = ref(false)
+const logoutPending = ref(false)
+const logoutError = ref('')
+
+/** 打开退出登录确认弹窗 */
+const openLogoutConfirm = (): void => {
+  logoutError.value = ''
+  showLogoutConfirm.value = true
+}
+
+/** 确认后的实际登出：停止所有任务 → 清主进程会话 → 清本地 → 回登录页 */
+const handleLogout = async (): Promise<void> => {
+  if (logoutPending.value) return
+  // 先快照账号：userStore.logout() 会清空 userInfo，必须在调用前取
+  const account = userStore.userInfo?.username || userStore.userInfo?.mobile || ''
+  logoutPending.value = true
+  logoutError.value = ''
+  try {
+    agentStore.stopAllTasks() // 重置渲染层流状态（主进程任务停止由 auth:logout 联动）
+    const result = await window.api.logout(account) // 主进程：停止全部任务 + 清 token + 清 session
+    if (!result.success) throw new Error(result.error || '退出登录失败')
+    showLogoutConfirm.value = false
+    userMenuOpen.value = false
+    userStore.logout() // 清渲染层 pinia + localStorage
+    await router.push('/') // 此时主进程 session 已清，守卫放行至登录页
+  } catch (err: unknown) {
+    // 主进程登出失败：保留本地登录态并提示，避免被守卫弹回 /home 的残缺态
+    logoutError.value = err instanceof Error ? err.message : '退出登录失败，请重试'
+  } finally {
+    logoutPending.value = false
+  }
 }
 
 const switchNav = (nav: NavKey): void => {
@@ -477,7 +506,7 @@ const switchNav = (nav: NavKey): void => {
               </button>
             </div>
             <!-- Logout -->
-            <button class="menu-logout" @click="handleLogout">
+            <button class="menu-logout" :disabled="logoutPending" @click="openLogoutConfirm">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -486,10 +515,21 @@ const switchNav = (nav: NavKey): void => {
               </svg>
               退出登录
             </button>
+            <p v-if="logoutError" class="logout-error">{{ logoutError }}</p>
           </div>
         </Transition>
       </div>
     </aside>
+
+    <!-- Logout confirm dialog -->
+    <ConfirmDialog
+      v-if="showLogoutConfirm"
+      title="确认登出"
+      message="登出后会停止所有正在执行中的任务（包括后台会话），确认要登出吗？"
+      confirm-text="确认登出"
+      @confirm="handleLogout"
+      @cancel="showLogoutConfirm = false"
+    />
 
     <!-- ════════════════════════════════════════════════ CONTENT ═══════════════════════════════════════════════════════ -->
     <main class="content-area">
@@ -1413,9 +1453,22 @@ const switchNav = (nav: NavKey): void => {
   background: rgba(239, 68, 68, 0.04);
 }
 
+.menu-logout:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .menu-logout svg {
   color: #ef4444;
   flex-shrink: 0;
+}
+
+.logout-error {
+  margin: 0;
+  padding: 0 20px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #ef4444;
 }
 
 /* Menu slide animation */

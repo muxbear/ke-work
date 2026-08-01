@@ -32,6 +32,9 @@ const smsMobile = ref('')
 const smsCode = ref('')
 const account = ref('')
 const password = ref('')
+// 输入框 ref（默认焦点；回车登录由 @keydown.enter 处理，无需 ref）
+const smsMobileInput = ref<HTMLInputElement | null>(null)
+const accountInput = ref<HTMLInputElement | null>(null)
 const showPassword = ref(false)
 const countdown = ref(0)
 const captchaOpen = ref(false)
@@ -167,6 +170,28 @@ const handleLogin = async (): Promise<void> => {
   handleWechatLogin()
 }
 
+// ── 键盘交互：默认焦点 + 回车触发登录 ──
+// 焦点通过输入框的 @vue:mounted 触发（Transition out-in 动画结束后元素才挂载，
+// watch + nextTick 时机不可靠），初始挂载与切换 tab 均会自动聚焦对应首输入框
+// 注意：@vnode-* 简写已随 Vue 3.4 移除，必须用 @vue: 前缀形式
+const focusSmsMobile = (): void => {
+  smsMobileInput.value?.focus()
+}
+
+const focusAccount = (): void => {
+  accountInput.value?.focus()
+}
+
+/** 验证码模式：手机号与验证码均已输入时按回车触发登录 */
+const handleSmsEnter = (): void => {
+  if (canLoginSms.value) void handleLogin()
+}
+
+/** 密码模式：账号与密码均已输入时按回车触发登录 */
+const handlePasswordEnter = (): void => {
+  if (canLoginPassword.value) void handleLogin()
+}
+
 const handleWechatLogin = async (): Promise<void> => {
   error.value = ''
   wechatPrompt.value = '正在打开微信授权页面，请完成授权。'
@@ -297,12 +322,15 @@ const handleWechatLogin = async (): Promise<void> => {
                   <span class="prefix-text">+86</span>
                 </span>
                 <input
+                  ref="smsMobileInput"
                   v-model="smsMobile"
                   type="tel"
                   placeholder="请输入手机号"
                   maxlength="11"
                   class="input-main"
                   @input="phoneError = ''"
+                  @keydown.enter="handleSmsEnter"
+                  @vue:mounted="focusSmsMobile"
                 />
               </div>
               <p v-if="phoneError" class="field-error">{{ phoneError }}</p>
@@ -318,6 +346,7 @@ const handleWechatLogin = async (): Promise<void> => {
                   maxlength="6"
                   class="input-main"
                   @input="codeError = ''"
+                  @keydown.enter="handleSmsEnter"
                 />
                 <button class="send-code-btn" :disabled="!canSendSms" @click="handleSendSms">
                   {{ countdownText }}
@@ -340,11 +369,14 @@ const handleWechatLogin = async (): Promise<void> => {
             <div class="field">
               <div :class="['input-row', { 'input-row--error': accountError }]">
                 <input
+                  ref="accountInput"
                   v-model="account"
                   type="text"
                   placeholder="手机号 / 用户名"
                   class="input-main"
                   @input="accountError = ''"
+                  @keydown.enter="handlePasswordEnter"
+                  @vue:mounted="focusAccount"
                 />
               </div>
               <p v-if="accountError" class="field-error">{{ accountError }}</p>
@@ -359,6 +391,7 @@ const handleWechatLogin = async (): Promise<void> => {
                   placeholder="请输入密码（至少6位）"
                   class="input-main"
                   @input="pwdError = ''"
+                  @keydown.enter="handlePasswordEnter"
                 />
                 <button class="toggle-pwd-btn" @click="showPassword = !showPassword">
                   <svg

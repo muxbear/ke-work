@@ -141,4 +141,17 @@ describe('useAgentStore（IPC 落库）', () => {
     expect(store.currentMessages).toHaveLength(1)
     expect(store.currentMessages[0].content).toBe('存量消息')
   })
+
+  it('stopAllTasks 重置流式状态（登出/切换前停止所有任务）', () => {
+    const store = useAgentStore()
+    store.isStreaming = true
+    store.isThinking = true
+
+    store.stopAllTasks()
+
+    expect(store.isStreaming).toBe(false)
+    expect(store.isThinking).toBe(false)
+    // 不触发任何 IPC（主进程任务停止由 auth:logout 联动）
+    expect(mock.api.cancelAgentMessage).not.toHaveBeenCalled()
+  })
 })

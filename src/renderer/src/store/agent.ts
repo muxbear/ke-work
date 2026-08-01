@@ -271,11 +271,21 @@ export const useAgentStore = defineStore('agent', () => {
     isThinking.value = false
   }
 
+  /**
+   * 停止所有正在执行中的任务（登出/切换场景）
+   * 主进程的任务停止由 auth:logout 联动 abort 全部流，此处仅重置渲染层流状态
+   */
+  function stopAllTasks(): void {
+    isStreaming.value = false
+    isThinking.value = false
+  }
+
   return {
     sidebarVisible,
     loaded,
     sendMessage,
     cancelMessage,
+    stopAllTasks,
     isStreaming,
     isThinking,
     currentConversationId,

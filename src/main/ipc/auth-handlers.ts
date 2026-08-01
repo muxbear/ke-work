@@ -7,6 +7,8 @@ interface AuthHandlerDeps {
   authService: AuthService
   dataSourceFactory: DataSourceFactory
   session: SessionService
+  /** 取消所有正在执行中的 agent 任务（登出前置动作） */
+  cancelAllAgents?: () => void
 }
 
 /** 统一的 IPC 结果包裹：成功返回 data，失败返回 { success:false, error } */
@@ -72,6 +74,8 @@ export function registerAuthHandlers(ipc: IpcMain, deps: AuthHandlerDeps): void 
       return { success: false, error: '参数错误' }
     }
     try {
+      // 登出前先停止所有正在执行中的任务（含后台会话）
+      deps.cancelAllAgents?.()
       await deps.authService.logout(account)
       deps.session.clear()
       return ok(null)

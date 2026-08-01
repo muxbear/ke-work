@@ -124,4 +124,73 @@ describe('E2E 登录全流程', () => {
       .filter({ hasText: '本地工作' })
       .waitFor({ state: 'visible', timeout: 15_000 })
   }, 90_000)
+
+  it('E2E-04: 退出登录——确认弹窗后回登录页，token 与主进程会话清除', async () => {
+    // 自包含登录（前序用例已清 localStorage）
+    await launchApp()
+    await page.getByRole('button', { name: '密码登录' }).click()
+    await page.getByPlaceholder('手机号 / 用户名').fill('e2euser')
+    await page.getByPlaceholder('请输入密码（至少6位）').fill('Secret123!')
+    await page.getByRole('button', { name: '登录', exact: true }).click()
+    await page.locator('.home-layout').waitFor({ state: 'visible', timeout: WAIT })
+
+    // 打开用户菜单 → 点击"退出登录" → 弹出确认窗口
+    await page.locator('[data-usermenu-trigger]').click()
+    await page.locator('.user-menu').waitFor({ state: 'visible', timeout: 15_000 })
+    await page.getByRole('button', { name: '退出登录' }).click()
+    await page.locator('.confirm-card').waitFor({ state: 'visible', timeout: 15_000 })
+    await page.getByText('登出后会停止所有正在执行中的任务（包括后台会话），确认要登出吗？').waitFor({
+      state: 'visible',
+      timeout: 15_000
+    })
+
+    // 点确认 → 回到登录页
+    await page.getByRole('button', { name: '确认登出' }).click()
+    await page.locator('.login-card').waitFor({ state: 'visible', timeout: WAIT })
+
+    // 本地 token 清除
+    const token = await page.evaluate(() => localStorage.getItem('user_token'))
+    expect(token).toBeNull()
+
+    // 主进程会话已清（session.json 持久化 userId=null）
+    const { readFileSync } = await import('fs')
+    const raw = JSON.parse(readFileSync(join(dataHome, 'config', 'session.json'), 'utf-8'))
+    expect(raw.userId).toBeNull()
+
+    // 手动导航 /home 被守卫拦截（主进程 session 为权威）
+    await page.evaluate(() => {
+      location.hash = '#/home'
+    })
+    await page.locator('.login-card').waitFor({ state: 'visible', timeout: 15_000 })
+    const homeVisible = await page.locator('.home-layout').count()
+    expect(homeVisible).toBe(0)
+  }, 90_000)
+
+  it('E2E-06: 登录页键盘交互——默认焦点与回车触发登录', async () => {
+    await launchApp()
+
+    // 默认（验证码模式）：手机号输入框获取焦点
+    await page.waitForFunction(() => {
+      const el = document.activeElement as HTMLInputElement | null
+      return el?.placeholder === '请输入手机号'
+    })
+
+    // 验证码模式：手机号与验证码未填全时按回车不触发登录
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(800)
+    expect(await page.locator('.login-card').count()).toBe(1)
+
+    // 切到密码登录：账号输入框自动获取焦点
+    await page.getByRole('button', { name: '密码登录' }).click()
+    await page.waitForFunction(() => {
+      const el = document.activeElement as HTMLInputElement | null
+      return el?.placeholder === '手机号 / 用户名'
+    })
+
+    // 密码模式：输入账号与密码后按回车触发登录进入 /home
+    await page.getByPlaceholder('手机号 / 用户名').fill('e2euser')
+    await page.getByPlaceholder('请输入密码（至少6位）').fill('Secret123!')
+    await page.keyboard.press('Enter')
+    await page.locator('.home-layout').waitFor({ state: 'visible', timeout: WAIT })
+  }, 90_000)
 })

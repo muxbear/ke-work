@@ -57,7 +57,9 @@ export class LocalAuthRepository implements IAuthRepository {
   }
 
   findByAccount(account: string): Promise<UserRecord | null> {
-    return this.findBy('username', account).then((u) => u ?? this.findBy('mobile', account))
+    return this.findBy('username', account).then(
+      (u) => u ?? this.findBy('mobile', account)
+    )
   }
 
   findByMobile(mobile: string): Promise<UserRecord | null> {
@@ -100,7 +102,10 @@ export class LocalAuthRepository implements IAuthRepository {
     lockDurationMs: number,
     now: number
   ): Promise<{ attempts: number; lockedUntil: number | null }> {
-    const row = this.ds.getDb().prepare('SELECT * FROM users WHERE id = ?').get(userId) as UserRow
+    const row = this.ds
+      .getDb()
+      .prepare('SELECT * FROM users WHERE id = ?')
+      .get(userId) as UserRow
     const attempts = row.failed_login_attempts + 1
     let lockedUntil: number | null = null
     if (attempts >= maxAttempts) {
@@ -115,7 +120,9 @@ export class LocalAuthRepository implements IAuthRepository {
     }
     this.ds
       .getDb()
-      .prepare('UPDATE users SET failed_login_attempts = ?, updated_at = ? WHERE id = ?')
+      .prepare(
+        'UPDATE users SET failed_login_attempts = ?, updated_at = ? WHERE id = ?'
+      )
       .run(attempts, now, userId)
     return { attempts, lockedUntil }
   }
@@ -129,14 +136,24 @@ export class LocalAuthRepository implements IAuthRepository {
       .run(Date.now(), userId)
   }
 
-  async updateToken(userId: string, tokenHash: string | null, expireAt: number | null): Promise<void> {
+  async updateToken(
+    userId: string,
+    tokenHash: string | null,
+    expireAt: number | null
+  ): Promise<void> {
     this.ds
       .getDb()
-      .prepare('UPDATE users SET token_hash = ?, token_expire = ?, updated_at = ? WHERE id = ?')
+      .prepare(
+        'UPDATE users SET token_hash = ?, token_expire = ?, updated_at = ? WHERE id = ?'
+      )
       .run(tokenHash, expireAt, Date.now(), userId)
   }
 
-  async saveSmsCode(mobile: string, codeHash: string, expiresAt: number): Promise<void> {
+  async saveSmsCode(
+    mobile: string,
+    codeHash: string,
+    expiresAt: number
+  ): Promise<void> {
     this.ds
       .getDb()
       .prepare(
@@ -150,7 +167,13 @@ export class LocalAuthRepository implements IAuthRepository {
       .getDb()
       .prepare('SELECT * FROM sms_codes WHERE mobile = ?')
       .get(mobile) as
-      | { mobile: string; code_hash: string; expires_at: number; used: number; created_at: number }
+      | {
+          mobile: string
+          code_hash: string
+          expires_at: number
+          used: number
+          created_at: number
+        }
       | undefined
     if (!row) return null
     return {
@@ -163,7 +186,10 @@ export class LocalAuthRepository implements IAuthRepository {
   }
 
   async markSmsCodeUsed(mobile: string): Promise<void> {
-    this.ds.getDb().prepare('UPDATE sms_codes SET used = 1 WHERE mobile = ?').run(mobile)
+    this.ds
+      .getDb()
+      .prepare('UPDATE sms_codes SET used = 1 WHERE mobile = ?')
+      .run(mobile)
   }
 
   async addAuditLog(input: AuditLogInput): Promise<void> {
