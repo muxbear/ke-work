@@ -52,8 +52,8 @@ describe('AgentBuilder', () => {
 
   beforeEach(() => {
     workDir = mkdtempSync(join(tmpdir(), 'kw-agent-'))
-    checkpointPath = join(workDir, 'checkpoints.sqlite')
-    storePath = join(workDir, 'store.sqlite')
+    checkpointPath = join(workDir, 'ke-work.db')
+    storePath = join(workDir, 'ke-work.db')
     createDeepAgentMock.mockClear()
   })
 
@@ -68,14 +68,14 @@ describe('AgentBuilder', () => {
     expect(config.store).toBeInstanceOf(SqliteStore)
   })
 
-  it('AG-06: local checkpointer 路径为数据库文件而非工作目录', async () => {
+  it('AG-06: local checkpointer 路径为数据库文件而非工作目录（与业务库共用 ke-work.db）', async () => {
     await createAgentBuilder('local', workDir, checkpointPath, storePath).setModel('m').build()
     const checkpointer = (createDeepAgentMock.mock.calls[0][0] as {
       checkpointer: { kind: string; path: string }
     }).checkpointer
     expect(checkpointer.kind).toBe('SqliteSaver')
     expect(checkpointer.path).not.toBe(workDir) // 回归：目录路径会导致 SQLITE_CANTOPEN_ISDIR
-    expect(checkpointer.path.endsWith('.sqlite')).toBe(true)
+    expect(checkpointer.path.endsWith('.db')).toBe(true)
   })
 
   it('AG-02: cloud 默认配置（PostgresSaver + PostgresStore）', async () => {

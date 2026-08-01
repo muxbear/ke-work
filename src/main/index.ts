@@ -116,11 +116,9 @@ app.whenReady().then(() => {
   registerAuthHandlers(ipcMain, { authService, dataSourceFactory, session, cancelAllAgents })
 
   // ── 初始化智能体（AgentManager）──
-  const agentManager = new AgentManager(
-    dataDir.getDir('workspace'),
-    join(dataDir.getBaseDir(), 'checkpoints.sqlite'),
-    join(dataDir.getBaseDir(), 'store.sqlite')
-  )
+  // checkpoint（短期记忆）与 store（长期记忆）与业务表共用 ke-work.db（SqliteSaver/SqliteStore 自建表）
+  const appDbPath = join(dataDir.getBaseDir(), 'ke-work.db')
+  const agentManager = new AgentManager(dataDir.getDir('workspace'), appDbPath, appDbPath)
   agentManager.init(mode).catch((err) => console.error('[main] agent init failed:', err))
 
   // ── 注册会话 IPC（基于 LangGraph checkpointer 的会话读写）──

@@ -48,11 +48,7 @@ describe('AgentManager', () => {
   beforeEach(() => {
     workDir = mkdtempSync(join(tmpdir(), 'kw-am-'))
     createDeepAgentMock.mockClear()
-    manager = new AgentManager(
-      workDir,
-      join(workDir, 'checkpoints.sqlite'),
-      join(workDir, 'store.sqlite')
-    )
+    manager = new AgentManager(workDir, join(workDir, 'ke-work.db'), join(workDir, 'ke-work.db'))
   })
 
   it('AG-06a: init 后 ready 返回 agent 实例', async () => {

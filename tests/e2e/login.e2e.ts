@@ -85,9 +85,9 @@ describe('E2E 登录全流程', () => {
       timeout: 15_000
     })
 
-    // 重启后校验持久化：消息存于 LangGraph checkpoints.sqlite（checkpoints 表 checkpoint 列，JsonPlusSerializer 明文 JSON）
+    // 重启后校验持久化：消息存于 ke-work.db 的 checkpoints 表（与业务表共库，checkpoint 列 JsonPlusSerializer 明文 JSON）
     await app.close()
-    const db = new Database(join(dataHome, 'checkpoints.sqlite'))
+    const db = new Database(join(dataHome, 'ke-work.db'))
     const rows = db.prepare('SELECT checkpoint FROM checkpoints').all() as Array<{ checkpoint: Buffer }>
     const allText = rows.map((r) => r.checkpoint.toString('utf-8')).join('')
     db.close()
