@@ -114,7 +114,8 @@ export const useAgentStore = defineStore('agent', () => {
     if (idx !== -1) conversations.value.splice(idx, 1)
 
     if (currentConversationId.value === id) {
-      currentConversationId.value = conversations.value.length > 0 ? conversations.value[0].id : null
+      currentConversationId.value =
+        conversations.value.length > 0 ? conversations.value[0].id : null
       selectedMessages.value = []
       if (currentConversationId.value) await selectConversation(currentConversationId.value)
     }
@@ -133,8 +134,11 @@ export const useAgentStore = defineStore('agent', () => {
     }
   }
 
+  /**
+   * 发送消息
+   * @param content 消息内容
+   */
   async function sendMessage(content: string): Promise<void> {
-    console.log('[store] sendMessage called with:', content)
     const conv = await ensureConversation()
 
     const userMsg: Message = {

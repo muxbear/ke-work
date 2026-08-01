@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useAgentStore } from '../store/agent'
-import MessageContent from '../components/MessageContent.vue'
+import { useAgentStore } from '@store/agent'
+import MessageContent from '@components/MessageContent.vue'
 
 const agentStore = useAgentStore()
 

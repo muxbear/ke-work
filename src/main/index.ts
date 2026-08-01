@@ -149,52 +149,54 @@ app.whenReady().then(() => {
   })
 
   // Agent message handler
-  ipcMain.handle(
-    'agent:send',
-    async (event, conversationId?: unknown, content?: unknown) => {
-      console.log('[main] agent:send handler, conversationId:', conversationId)
-      const win = BrowserWindow.fromWebContents(event.sender)
-      if (!win) {
-        console.error('[main] No window found for event.sender')
-        throw new Error('No window found')
-      }
-      if (typeof conversationId !== 'string' || !conversationId || typeof content !== 'string' || !content) {
-        return { success: false, error: '参数错误' }
-      }
-
-      const controller = new AbortController()
-      abortControllers.set(win.id, controller)
-
-      try {
-        // 会话历史（checkpoint 内）+ 本轮新消息；历史带 id，图内 reducer 按 id 去重
-        const userId = session.requireUserId()
-        const [agent, history] = await Promise.all([
-          agentManager.ready(),
-          conversationStore.getMessages(userId, conversationId)
-        ])
-        const messages = toLangChainMessages(history)
-        messages.push(new HumanMessage({ id: `msg-${randomUUID()}`, content }))
-
-        await invokeSendMessage(
-          messages,
-          win,
-          agent,
-          {
-            thread_id: conversationStore.buildThreadId(userId, conversationId),
-            user_id: userId
-          },
-          controller.signal
-        )
-        console.log('[main] invokeSendMessage completed, returning success')
-        return { success: true }
-      } catch (error) {
-        console.error('[main] Error handling message:', error)
-        return { success: false, error: (error as Error).message || 'Unknown error' }
-      } finally {
-        abortControllers.delete(win.id)
-      }
+  ipcMain.handle('agent:send', async (event, conversationId?: unknown, content?: unknown) => {
+    console.log('[main] agent:send handler, conversationId:', conversationId)
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) {
+      console.error('[main] No window found for event.sender')
+      throw new Error('No window found')
     }
-  )
+    if (
+      typeof conversationId !== 'string' ||
+      !conversationId ||
+      typeof content !== 'string' ||
+      !content
+    ) {
+      return { success: false, error: '参数错误' }
+    }
+
+    const controller = new AbortController()
+    abortControllers.set(win.id, controller)
+
+    try {
+      // 会话历史（checkpoint 内）+ 本轮新消息；历史带 id，图内 reducer 按 id 去重
+      const userId = session.requireUserId()
+      const [agent, history] = await Promise.all([
+        agentManager.ready(),
+        conversationStore.getMessages(userId, conversationId)
+      ])
+      const messages = toLangChainMessages(history)
+      messages.push(new HumanMessage({ id: `msg-${randomUUID()}`, content }))
+
+      await invokeSendMessage(
+        messages,
+        win,
+        agent,
+        {
+          thread_id: conversationStore.buildThreadId(userId, conversationId),
+          user_id: userId
+        },
+        controller.signal
+      )
+      console.log('[main] invokeSendMessage completed, returning success')
+      return { success: true }
+    } catch (error) {
+      console.error('[main] Error handling message:', error)
+      return { success: false, error: (error as Error).message || 'Unknown error' }
+    } finally {
+      abortControllers.delete(win.id)
+    }
+  })
 
   // Agent cancel handler
   ipcMain.on('agent:cancel', (event) => {

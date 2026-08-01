@@ -11,7 +11,8 @@ export default defineConfig({
         '@renderer': resolve('src/renderer/src'),
         '@router': resolve('src/renderder/src/router'),
         '@store': resolve('src/renderer/src/store'),
-        '@views': resolve('src/renderer/views')
+        '@views': resolve('src/renderer/views'),
+        '@components': resolve('src/renderer/src/components')
       }
     },
     plugins: [vue()],
