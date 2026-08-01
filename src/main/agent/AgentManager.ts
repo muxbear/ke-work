@@ -9,11 +9,14 @@ export class AgentManager {
   private model = 'deepseek:deepseek-v4-pro'
   private skills: string[] = []
 
-  constructor(private readonly workspaceDir: string) {}
+  constructor(
+    private readonly workspaceDir: string,
+    private readonly checkpointDbPath: string
+  ) {}
 
   /** 应用启动时初始化智能体 */
   async init(mode: WorkMode): Promise<void> {
-    this.builder = new AgentBuilder(mode, this.workspaceDir)
+    this.builder = new AgentBuilder(mode, this.workspaceDir, this.checkpointDbPath)
       .withModeDefaults()
       .setModel(this.model)
     if (this.skills.length > 0) this.builder.setSkills(this.skills)

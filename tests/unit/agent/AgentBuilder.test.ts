@@ -60,7 +60,7 @@ describe('AgentBuilder', () => {
   })
 
   it('AG-01: local 默认配置（FilesystemBackend + SqliteSaver）', async () => {
-    await createAgentBuilder('local', workDir)
+    await createAgentBuilder('local', workDir, join(workDir, 'checkpoints.sqlite'))
       .setModel('deepseek:deepseek-v4-pro')
       .build()
     const config = createDeepAgentMock.mock.calls[0][0] as Record<string, never>
@@ -68,9 +68,19 @@ describe('AgentBuilder', () => {
     expect((config.checkpointer as { kind: string }).kind).toBe('SqliteSaver')
   })
 
+  it('AG-06: local checkpointer 路径为数据库文件而非工作目录', async () => {
+    await createAgentBuilder('local', workDir, join(workDir, 'checkpoints.sqlite')).setModel('m').build()
+    const checkpointer = (createDeepAgentMock.mock.calls[0][0] as {
+      checkpointer: { kind: string; path: string }
+    }).checkpointer
+    expect(checkpointer.kind).toBe('SqliteSaver')
+    expect(checkpointer.path).not.toBe(workDir) // 回归：目录路径会导致 SQLITE_CANTOPEN_ISDIR
+    expect(checkpointer.path.endsWith('.sqlite')).toBe(true)
+  })
+
   it('AG-02: cloud 默认配置（PostgresSaver + PostgresStore）', async () => {
     process.env.CLOUD_POSTGRES_CONN_STRING = 'postgres://mock'
-    await createAgentBuilder('cloud', workDir)
+    await createAgentBuilder('cloud', workDir, join(workDir, 'checkpoints.sqlite'))
       .setModel('deepseek:deepseek-v4-pro')
       .build()
     const config = createDeepAgentMock.mock.calls[0][0] as Record<string, never>
@@ -81,19 +91,19 @@ describe('AgentBuilder', () => {
 
   it('AG-03: 链式覆盖自定义 backend', async () => {
     const customBackend = { kind: 'custom' }
-    await createAgentBuilder('local', workDir).setModel('m').setBackend(customBackend).build()
+    await createAgentBuilder('local', workDir, join(workDir, 'checkpoints.sqlite')).setModel('m').setBackend(customBackend).build()
     const config = createDeepAgentMock.mock.calls[0][0] as { backend: unknown }
     expect(config.backend).toBe(customBackend)
   })
 
   it('AG-04: 未设置模型时 build 不注入 model', async () => {
-    const builder = await createAgentBuilder('local', workDir)
+    const builder = await createAgentBuilder('local', workDir, join(workDir, 'checkpoints.sqlite'))
     await builder.build()
     expect((createDeepAgentMock.mock.calls[0][0] as { model?: string }).model).toBeUndefined()
   })
 
   it('AG-05: setMode 保留自定义项，重载默认 backend/记忆', async () => {
-    const builder = await createAgentBuilder('local', workDir)
+    const builder = await createAgentBuilder('local', workDir, join(workDir, 'checkpoints.sqlite'))
     builder.setModel('m1').setSkills(['/skills/'])
     await builder.setMode('cloud').withModeDefaults()
     await builder.build()

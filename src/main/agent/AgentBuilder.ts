@@ -48,7 +48,8 @@ export class AgentBuilder {
 
   constructor(
     mode: WorkMode,
-    private readonly workspaceDir: string
+    private readonly workspaceDir: string,
+    private readonly checkpointDbPath: string
   ) {
     this.mode = mode
   }
@@ -65,7 +66,7 @@ export class AgentBuilder {
    */
   withModeDefaults(): this {
     this.config.backend = createBackend(this.mode, this.workspaceDir)
-    this.config.checkpointer = createCheckpointer(this.mode, this.workspaceDir)
+    this.config.checkpointer = createCheckpointer(this.mode, this.checkpointDbPath)
     this.storePromise = createStore(this.mode)
     return this
   }
@@ -138,6 +139,10 @@ export class AgentBuilder {
 }
 
 /** 工厂入口：按工作模式创建带默认配置的建造者（同步返回，可立即链式调用） */
-export function createAgentBuilder(mode: WorkMode, workspaceDir: string): AgentBuilder {
-  return new AgentBuilder(mode, workspaceDir).withModeDefaults()
+export function createAgentBuilder(
+  mode: WorkMode,
+  workspaceDir: string,
+  checkpointDbPath: string
+): AgentBuilder {
+  return new AgentBuilder(mode, workspaceDir, checkpointDbPath).withModeDefaults()
 }

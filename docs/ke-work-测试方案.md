@@ -521,3 +521,37 @@ Vue 3.4 起已移除该写法，dev 模式 Vite 编译器拒绝编译 Login.vue 
 **用例**: E2E-06（默认焦点 / tab 切换焦点 / 密码模式回车登录）✓
 
 **用例数**: 149 单元 + 8 E2E
+
+### 迭代 7c（2026-08-01）— 启动报错：checkpoint-sqlite 原生模块根治 + postinstall 持久化
+
+**用户报告**: `npm run dev` 启动日志报 `[main] agent init failed: Error: Could not locate the bindings file`（指向 `@langchain/langgraph-checkpoint-sqlite/node_modules/better-sqlite3`）。
+
+**根因（两段）**:
+1. 嵌套 better-sqlite3 **v12.11.1 非 N-API**，需按运行时 ABI 编译；安装时 `prebuild-install || node-gyp rebuild`
+   两分支均未成功（当时网络问题），`build/` 恒为空，且 npm 不会对已装包重跑安装脚本 → `bindings` 查找失败。
+   顶层 v13.0.2 是包内自带 N-API 预编译（Node/Electron 通用），故本地数据库初始化不受影响。
+2. 修好模块后暴露潜伏 bug：`AgentBuilder.withModeDefaults()` 把 **workspace 目录**当数据库文件路径传给
+   `SqliteSaver.fromConnString()` → `SQLITE_CANTOPEN_ISDIR`。此前模块从未在 Electron 加载成功，
+   该路径从未真正执行过，故一直未暴露。
+
+**修复**:
+1. 模块级：下载 GitHub release 的 `better-sqlite3-v12.11.1-electron-v140-win32-x64.tar.gz`（Electron 39 = ABI 140）
+   解压到嵌套包 `build/Release/` —— **无需本地编译**（迭代 6b 卡住的 headers/工具链问题由此绕开）。
+2. 代码级（TDD，新增回归用例 AG-06）：`checkpointDbPath` 由组合根 `main/index.ts` 传入
+   （`~/.ke-work/checkpoints.sqlite`，与 `ke-work.db` 同层），经 `AgentManager` → `AgentBuilder` 透传。
+3. 持久化：新增 `scripts/ensure-better-sqlite3-electron.cjs`，postinstall 改为
+   `node scripts/ensure-better-sqlite3-electron.cjs && electron-builder install-app-deps`（脚本在前，关键产物先就位）。
+   脚本对每份 better-sqlite3 拷贝：包内 N-API prebuilds → 跳过；绑定缺失/损坏 → prebuild-install 下载
+   Electron 预编译包；绑定被 Node 加载成功（= Node ABI）→ `--force` 重下；绑定在 Node 下抛
+   `NODE_MODULE_VERSION` 不匹配 → 正是 Electron ABI → 跳过。ABI 探测在独立子进程执行（Windows 上
+   DLL 被本进程加载后会锁定，覆盖写入报 EBUSY——测试 3 踩坑验证）。
+4. 验证：Electron 冒烟（两份模块 ABI 140 加载执行 ✓）、151 单测全过 ✓、`npm run dev` 启动无 agent init 报错 ✓、
+   `~/.ke-work/checkpoints.sqlite` 正常创建 ✓、脚本三态测试（跳过/缺失下载/Node-ABI 强制重下）✓。
+
+**环境实测**: 本机 `electron-builder install-app-deps` 必然失败（`Could not find any Visual Studio
+installation`，无 VS 工具链——这也是迭代 6b 编译尝试失败的深层原因）。postinstall 已改为容忍式：
+`node scripts/ensure-better-sqlite3-electron.cjs && (electron-builder install-app-deps || echo ...)`，
+install-app-deps 失败仅提示不中断，`npm install` 正常完成（退出码 0）；better-sqlite3 绑定由脚本兜底，
+`npm run dev` 不受影响。整链实测：脚本跳过 ✓ → install-app-deps 失败被容忍 ✓ → 退出 0 ✓ → dev 启动无报错 ✓。
+
+**用例数**: 149 单元（+AG-06）+ 8 E2E

@@ -85,11 +85,13 @@ const sendMessage = (): void => {
   if (!taskInput.value.trim()) return
   const content = taskInput.value.trim()
   taskInput.value = ''
-  agentStore.sendMessage(content).catch((err: unknown) => {
-    console.error('[NewTaskPage] sendMessage failed:', err)
-    // 失败时恢复输入内容，避免用户输入丢失且无反馈
-    taskInput.value = content
-  })
+  agentStore
+    .sendMessage(content)
+    .catch((err: unknown) => {
+      console.error('[NewTaskPage] sendMessage failed:', err)
+      // 失败时恢复输入内容，避免用户输入丢失且无反馈
+      taskInput.value = content
+    })
 }
 
 // ── Close plus menu on outside click ──
@@ -126,8 +128,7 @@ watch(
       <!-- Category pills -->
       <div class="category-pills">
         <button v-for="cat in categories" :key="cat.key"
-          :class="['category-pill', { 'category-pill--active': category === cat.key }]"
-          @click="category = cat.key">
+          :class="['category-pill', { 'category-pill--active': category === cat.key }]" @click="category = cat.key">
           <span>{{ cat.icon }}</span>
           {{ cat.label }}
         </button>
@@ -259,8 +260,8 @@ watch(
               <div v-if="modelOpen" class="model-dropdown">
                 <button v-for="opt in modelOptions" :key="opt"
                   :class="['model-option', { 'model-option--active': model === opt }]" @click="selectModel(opt)">
-                  <svg v-if="model === opt" width="10" height="10" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="3">
+                  <svg v-if="model === opt" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="3">
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                   <span v-else class="model-option-gap"></span>
@@ -278,7 +279,8 @@ watch(
             </svg>
           </button>
           <!-- 发送/停止按钮 -->
-          <button v-if="!isStreaming" class="send-btn" :class="{ 'send-btn--active': taskInput.trim() }" @click="sendMessage">
+          <button v-if="!isStreaming" class="send-btn" :class="{ 'send-btn--active': taskInput.trim() }"
+            @click="sendMessage">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <line x1="22" y1="2" x2="11" y2="13" />
               <polygon points="22 2 15 22 11 13 2 9 22 2" />
@@ -293,8 +295,7 @@ watch(
           <Transition name="plus-menu-slide">
             <div v-if="showInputPlusMenu" class="plus-menu">
               <button class="plus-menu-item" @click="showInputPlusMenu = false">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                 </svg>
                 <span>添加文件</span>
@@ -304,8 +305,7 @@ watch(
                 </svg>
               </button>
               <button class="plus-menu-item" @click="showInputPlusMenu = false">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
                 </svg>
                 <span>模式</span>
@@ -315,8 +315,7 @@ watch(
                 </svg>
               </button>
               <button class="plus-menu-item" @click="showInputPlusMenu = false">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polygon
                     points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                 </svg>
@@ -327,8 +326,7 @@ watch(
                 </svg>
               </button>
               <button class="plus-menu-item" @click="showInputPlusMenu = false">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="12" cy="12" r="3" />
                   <path
                     d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
@@ -340,8 +338,7 @@ watch(
                 </svg>
               </button>
               <button class="plus-menu-item" @click="showInputPlusMenu = false">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="18" cy="5" r="3" />
                   <circle cx="6" cy="12" r="3" />
                   <circle cx="18" cy="19" r="3" />
@@ -400,11 +397,9 @@ watch(
             <div v-if="msg.reasoning" class="thinking-block">
               <button class="thinking-header" @click="toggleThinking(i)">
                 <span class="thinking-header-text">深度思考</span>
-                <svg
-                  :class="['thinking-chevron', { 'thinking-chevron--collapsed': thinkingCollapsed[i] }]"
-                  width="14" height="14" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                >
+                <svg :class="['thinking-chevron', { 'thinking-chevron--collapsed': thinkingCollapsed[i] }]" width="14"
+                  height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round">
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
               </button>
@@ -450,9 +445,9 @@ watch(
               </svg>
             </button>
             <!-- 发送/停止按钮 -->
-            <button v-if="!isStreaming" class="send-btn" :class="{ 'send-btn--active': taskInput.trim() }" @click="sendMessage">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2.5">
+            <button v-if="!isStreaming" class="send-btn" :class="{ 'send-btn--active': taskInput.trim() }"
+              @click="sendMessage">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <line x1="22" y1="2" x2="11" y2="13" />
                 <polygon points="22 2 15 22 11 13 2 9 22 2" />
               </svg>
@@ -466,55 +461,50 @@ watch(
             <Transition name="plus-menu-slide">
               <div v-if="showInputPlusMenu" class="plus-menu plus-menu--compact">
                 <button class="plus-menu-item" @click="showInputPlusMenu = false">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="2">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                   </svg>
                   <span>添加文件</span>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="2" class="plus-menu-chevron">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    class="plus-menu-chevron">
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
                 </button>
                 <button class="plus-menu-item" @click="showInputPlusMenu = false">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="2">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
                   </svg>
                   <span>模式</span>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="2" class="plus-menu-chevron">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    class="plus-menu-chevron">
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
                 </button>
                 <button class="plus-menu-item" @click="showInputPlusMenu = false">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="2">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polygon
                       points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                   </svg>
                   <span>专家</span>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="2" class="plus-menu-chevron">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    class="plus-menu-chevron">
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
                 </button>
                 <button class="plus-menu-item" @click="showInputPlusMenu = false">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="2">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="3" />
                     <path
                       d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
                   </svg>
                   <span>技能</span>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="2" class="plus-menu-chevron">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    class="plus-menu-chevron">
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
                 </button>
                 <button class="plus-menu-item" @click="showInputPlusMenu = false">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="2">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="18" cy="5" r="3" />
                     <circle cx="6" cy="12" r="3" />
                     <circle cx="18" cy="19" r="3" />
@@ -522,8 +512,8 @@ watch(
                     <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
                   </svg>
                   <span>连接器</span>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="2" class="plus-menu-chevron">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    class="plus-menu-chevron">
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
                 </button>
@@ -1138,6 +1128,7 @@ watch(
 }
 
 @keyframes dotBounce {
+
   0%,
   100% {
     transform: translateY(0);

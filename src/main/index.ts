@@ -115,7 +115,10 @@ app.whenReady().then(() => {
   registerAuthHandlers(ipcMain, { authService, dataSourceFactory, session, cancelAllAgents })
 
   // ── 初始化智能体（AgentManager）──
-  const agentManager = new AgentManager(dataDir.getDir('workspace'))
+  const agentManager = new AgentManager(
+    dataDir.getDir('workspace'),
+    join(dataDir.getBaseDir(), 'checkpoints.sqlite')
+  )
   agentManager.init(mode).catch((err) => console.error('[main] agent init failed:', err))
 
   // ── 注册会话 IPC ──

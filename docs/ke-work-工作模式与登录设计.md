@@ -849,6 +849,8 @@ IPC mode:set
 ```
 ~/.ke-work/
 ├── ke-work.db          # SQLite 数据库（users/conversations/messages/config/audit_logs/sms_codes）
+├── checkpoints.sqlite  # Agent 短期记忆（SqliteSaver checkpointer；迭代 7c 起独立文件，
+│                       #   与 ke-work.db 分离避免 schema/锁混用。注：早期设计片段曾指向 ke-work.db）
 ├── config/
 │   ├── work-mode.json  # 工作模式持久化（独立于数据库）
 │   └── secrets.bin     # safeStorage 加密的密钥（JWT secret 等）

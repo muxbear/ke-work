@@ -55,7 +55,7 @@ describe('AgentManager', () => {
   beforeEach(() => {
     workDir = mkdtempSync(join(tmpdir(), 'kw-am-'))
     createDeepAgentMock.mockClear()
-    manager = new AgentManager(workDir)
+    manager = new AgentManager(workDir, join(workDir, 'checkpoints.sqlite'))
   })
 
   it('AG-06a: init 后 getAgent 返回实例', async () => {
