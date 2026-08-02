@@ -107,6 +107,8 @@ export interface WorkspaceAPI {
   /** 不使用工作空间：~/KeWork/<YYYYMMDD-HHmmss> 时间戳目录 */
   useTimestampWorkspace(): Promise<IpcResult<Workspace>>
   openWorkspace(id: string): Promise<IpcResult<null>>
+  /** 从列表中删除工作空间（仅删记录，不动磁盘文件夹） */
+  deleteWorkspace(id: string): Promise<IpcResult<null>>
   /** 列出工作空间下相对路径目录的条目（顶层传空串） */
   listWorkspaceFiles(
     workspaceId: string,

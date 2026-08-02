@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../store/user'
 import AssistantPage from './AssistantPage.vue'
@@ -59,10 +59,75 @@ onUnmounted(() => {
 
 const toggleSpaceMenu = (spaceKey: string): void => {
   activeSpaceMenu.value = activeSpaceMenu.value === spaceKey ? null : spaceKey
+  adjustMenuDirection()
 }
 
 const toggleChatMenu = (chatId: string): void => {
   activeChatMenu.value = activeChatMenu.value === chatId ? null : chatId
+  adjustMenuDirection()
+}
+
+// ── hover 菜单状态机：滑到三个点按钮上弹出，离开按钮/菜单区域隐藏 ──
+const spaceMenuHover = ref(false)
+const chatMenuHover = ref(false)
+let spaceMenuCloseTimer: ReturnType<typeof setTimeout> | null = null
+let chatMenuCloseTimer: ReturnType<typeof setTimeout> | null = null
+
+const openHoverSpaceMenu = (spaceKey: string): void => {
+  spaceMenuHover.value = true
+  if (spaceMenuCloseTimer) clearTimeout(spaceMenuCloseTimer)
+  activeSpaceMenu.value = spaceKey
+  adjustMenuDirection()
+}
+
+const spaceMenuEnter = (): void => {
+  spaceMenuHover.value = true
+}
+
+/** 三点按钮 mouseleave：延迟关闭，给鼠标移动到菜单的时间 */
+const scheduleSpaceMenuClose = (): void => {
+  if (spaceMenuCloseTimer) clearTimeout(spaceMenuCloseTimer)
+  spaceMenuCloseTimer = setTimeout(() => {
+    if (!spaceMenuHover.value) activeSpaceMenu.value = null
+  }, 120)
+}
+
+const closeHoverSpaceMenu = (): void => {
+  spaceMenuHover.value = false
+  activeSpaceMenu.value = null
+}
+
+const openHoverChatMenu = (chatId: string): void => {
+  chatMenuHover.value = true
+  if (chatMenuCloseTimer) clearTimeout(chatMenuCloseTimer)
+  activeChatMenu.value = chatId
+  adjustMenuDirection()
+}
+
+const chatMenuEnter = (): void => {
+  chatMenuHover.value = true
+}
+
+const scheduleChatMenuClose = (): void => {
+  if (chatMenuCloseTimer) clearTimeout(chatMenuCloseTimer)
+  chatMenuCloseTimer = setTimeout(() => {
+    if (!chatMenuHover.value) activeChatMenu.value = null
+  }, 120)
+}
+
+const closeHoverChatMenu = (): void => {
+  chatMenuHover.value = false
+  activeChatMenu.value = null
+}
+
+/** 从列表中删除工作空间（仅删记录，磁盘文件夹保留；该空间下的会话归"默认空间"） */
+const deleteWorkspaceItem = async (wsId: string): Promise<void> => {
+  activeSpaceMenu.value = null
+  try {
+    await workspaceStore.remove(wsId)
+  } catch (err) {
+    console.error('[Home] delete workspace failed:', err)
+  }
 }
 
 const handleArchiveChat = (chatId: string): void => {
@@ -104,9 +169,14 @@ interface ConversationGroup {
 const conversationGroups = computed<ConversationGroup[]>(() => {
   const map = new Map<string, ConversationGroup>()
   for (const c of agentStore.sortedConversations) {
-    const key = c.workspace?.id ?? '__default__'
+    // 工作空间已被删除（记录不在列表）→ 该会话归"默认空间"（metadata 保留但不再展示旧分组）
+    const validWs =
+      c.workspace?.id && workspaceStore.workspaces.some((w) => w.id === c.workspace!.id)
+        ? c.workspace
+        : null
+    const key = validWs?.id ?? '__default__'
     if (!map.has(key)) {
-      map.set(key, { key, ws: c.workspace ?? null, chats: [] })
+      map.set(key, { key, ws: validWs ?? null, chats: [] })
     }
     map.get(key)!.chats.push(c)
   }
@@ -185,8 +255,22 @@ const switchNav = (nav: NavKey): void => {
   activeNav.value = nav
   userMenuOpen.value = false
   if (nav === '新建任务') {
-    agentStore.createConversation()
+    // 仅进入欢迎态，不创建会话条目（发送第一条消息时才创建）
+    agentStore.resetNewTask()
   }
+}
+
+/**
+ * 菜单弹出方向自适应：菜单打开后测量位置，若超出视口底部则向上弹出（防遮挡）
+ * 同一时间仅一个空间/会话菜单在 DOM 中，直接查询统一调整
+ */
+const adjustMenuDirection = (): void => {
+  nextTick(() => {
+    const menu = document.querySelector<HTMLElement>('.space-menu, .chat-menu')
+    if (!menu) return
+    const rect = menu.getBoundingClientRect()
+    menu.classList.toggle('menu--up', rect.bottom > window.innerHeight - 8)
+  })
 }
 </script>
 
@@ -335,7 +419,8 @@ const switchNav = (nav: NavKey): void => {
                 <div class="space-header-right">
                   <div class="space-header-actions">
                     <button class="space-header-btn space-header-menu" type="button" data-space-menu-trigger
-                      aria-label="更多" title="更多" @click.stop="toggleSpaceMenu(group.key)">
+                      aria-label="更多" title="更多" @click.stop="toggleSpaceMenu(group.key)"
+                      @mouseenter="openHoverSpaceMenu(group.key)" @mouseleave="scheduleSpaceMenuClose">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round">
                         <circle cx="12" cy="5" r="1" />
@@ -344,16 +429,18 @@ const switchNav = (nav: NavKey): void => {
                       </svg>
                     </button>
                     <Transition name="dropdown">
-                      <div v-if="activeSpaceMenu === group.key" class="space-menu">
+                      <div v-if="activeSpaceMenu === group.key" class="space-menu" @mouseenter="spaceMenuEnter"
+                        @mouseleave="closeHoverSpaceMenu">
                         <button class="space-menu-item" type="button" :disabled="!group.ws"
-                          @click="openWorkspaceDir(group.ws)">
+                          @click.stop="openWorkspaceDir(group.ws)">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round">
                             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                           </svg>
                           打开文件夹
                         </button>
-                        <button class="space-menu-item space-menu-item--danger" type="button">
+                        <button class="space-menu-item space-menu-item--danger" type="button" :disabled="!group.ws"
+                          @click.stop="group.ws && deleteWorkspaceItem(group.ws.id)">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round">
                             <polyline points="3 6 5 6 21 6" />
@@ -394,7 +481,8 @@ const switchNav = (nav: NavKey): void => {
                     <div class="space-chat-actions">
                       <div class="chat-menu-wrapper">
                         <button class="space-chat-action-btn" data-chat-menu-trigger title="更多"
-                          @click.stop="toggleChatMenu(chat.id)">
+                          @click.stop="toggleChatMenu(chat.id)" @mouseenter="openHoverChatMenu(chat.id)"
+                          @mouseleave="scheduleChatMenuClose">
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round">
                             <circle cx="12" cy="5" r="1" />
@@ -403,15 +491,16 @@ const switchNav = (nav: NavKey): void => {
                           </svg>
                         </button>
                         <Transition name="dropdown">
-                          <div v-if="activeChatMenu === chat.id" class="chat-menu">
-                            <button class="chat-menu-item" type="button">
+                          <div v-if="activeChatMenu === chat.id" class="chat-menu" @mouseenter="chatMenuEnter"
+                            @mouseleave="closeHoverChatMenu">
+                            <button class="chat-menu-item" type="button" @click.stop>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2" stroke-linecap="round">
                                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                               </svg>
                               打开文件夹
                             </button>
-                            <button class="chat-menu-item" type="button">
+                            <button class="chat-menu-item" type="button" @click.stop>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2" stroke-linecap="round">
                                 <polyline points="1 4 1 10 7 10" />
@@ -420,7 +509,7 @@ const switchNav = (nav: NavKey): void => {
                               重命名
                             </button>
                             <button class="chat-menu-item chat-menu-item--danger" type="button"
-                              @click="deleteChat(chat.id)">
+                              @click.stop="deleteChat(chat.id)">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2" stroke-linecap="round">
                                 <polyline points="3 6 5 6 21 6" />
@@ -959,6 +1048,12 @@ const switchNav = (nav: NavKey): void => {
   z-index: 10;
 }
 
+/* 弹出方向自适应：超出视口底部时向上弹出（防遮挡） */
+.space-menu.menu--up {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
 .space-menu-item {
   display: flex;
   align-items: center;
@@ -1131,6 +1226,12 @@ const switchNav = (nav: NavKey): void => {
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
   border: 1px solid rgba(8, 145, 178, 0.14);
   z-index: 10;
+}
+
+/* 弹出方向自适应：超出视口底部时向上弹出（防遮挡） */
+.chat-menu.menu--up {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 
 .chat-menu-item {

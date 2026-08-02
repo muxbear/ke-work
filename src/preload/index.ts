@@ -92,6 +92,9 @@ const api = {
   openWorkspace(id: string) {
     return ipcRenderer.invoke('workspace:open', id)
   },
+  deleteWorkspace(id: string) {
+    return ipcRenderer.invoke('workspace:delete', id)
+  },
   listWorkspaceFiles(workspaceId: string, relPath?: string) {
     return ipcRenderer.invoke('workspace:list-files', workspaceId, relPath)
   },

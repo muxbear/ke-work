@@ -111,6 +111,16 @@ export class WorkspaceService {
     return this.repo.create({ name, path: dir, source: 'external' })
   }
 
+  /**
+   * 从列表中删除工作空间（仅删记录，不删除磁盘文件夹——避免误删用户数据）
+   * 已绑定该空间的会话在下次加载时归"默认空间"（resolveWorkspace 找不到记录）
+   */
+  deleteWorkspace(id: string): void {
+    if (!this.repo.getById(id)) throw new Error('工作空间不存在')
+    this.repo.delete(id)
+    console.log(`[workspace] deleted workspace record: ${id}`)
+  }
+
   /** 在系统资源管理器中打开工作空间目录（只接受表内 id） */
   async openWorkspace(id: string): Promise<void> {
     const ws = this.repo.getById(id)

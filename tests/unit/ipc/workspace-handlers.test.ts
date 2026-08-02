@@ -126,6 +126,18 @@ describe('workspace IPC handlers', () => {
     expect(result.success).toBe(true)
   })
 
+  it('注册 workspace:delete 通道并调用服务', async () => {
+    const ipc = createFakeIpcMain()
+    const deleteWorkspace = vi.fn().mockReturnValue(undefined)
+    registerWorkspaceHandlers(ipc as never, deps({ workspaceService: { deleteWorkspace } }))
+    expect(ipc.handle).toHaveBeenCalledWith('workspace:delete', expect.any(Function))
+    const noId = await ipc.invoke<{ success: boolean; error?: string }>('workspace:delete')
+    expect(noId.success).toBe(false)
+    const ok = await ipc.invoke<{ success: boolean }>('workspace:delete', 'ws-1')
+    expect(deleteWorkspace).toHaveBeenCalledWith('ws-1')
+    expect(ok.success).toBe(true)
+  })
+
   it('注册 workspace:list-files/read-file 通道', async () => {
     const ipc = createFakeIpcMain()
     registerWorkspaceHandlers(ipc as never, deps())

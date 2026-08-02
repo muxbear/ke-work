@@ -39,6 +39,19 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
+  /** 从列表中删除工作空间（主进程仅删记录，磁盘文件夹保留）；失败抛错 */
+  async function remove(id: string): Promise<void> {
+    const result = await window.api.deleteWorkspace(id)
+    if (!result.success) {
+      throw new Error(result.error || '删除工作空间失败')
+    }
+    workspaces.value = workspaces.value.filter((w) => w.id !== id)
+    if (currentId.value === id) {
+      currentId.value = null
+      persistCurrentId()
+    }
+  }
+
   /** 从主进程加载工作空间列表；currentId 失效（空间被删）则清空选中 */
   async function load(): Promise<void> {
     const result = await window.api.listWorkspaces()
@@ -130,6 +143,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     load,
     select,
     create,
+    remove,
     selectExternal,
     useTimestamp,
     open,

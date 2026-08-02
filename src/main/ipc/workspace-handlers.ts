@@ -65,6 +65,16 @@ export function registerWorkspaceHandlers(ipc: IpcMain, deps: WorkspaceHandlerDe
     }
   })
 
+  ipc.handle('workspace:delete', async (_event, id?: unknown) => {
+    if (typeof id !== 'string' || !id) return fail('参数错误')
+    try {
+      workspaceService.deleteWorkspace(id)
+      return ok(null)
+    } catch (err) {
+      return fail((err as Error).message)
+    }
+  })
+
   ipc.handle('workspace:list-files', async (_event, id?: unknown, relPath?: unknown) => {
     if (typeof id !== 'string' || !id) return fail('参数错误')
     if (relPath !== undefined && typeof relPath !== 'string') return fail('参数错误')

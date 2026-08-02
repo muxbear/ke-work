@@ -99,6 +99,15 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   /**
+   * 进入"新建任务"欢迎态：清空当前会话选择与消息（不创建会话条目；
+   * 发送第一条消息时 ensureConversation 才创建，避免点击导航即出现"新对话"条目）
+   */
+  function resetNewTask(): void {
+    currentConversationId.value = null
+    selectedMessages.value = []
+  }
+
+  /**
    * 获取本次对话（多轮对话）
    * @returns
    */
@@ -323,6 +332,7 @@ export const useAgentStore = defineStore('agent', () => {
     isThinking,
     currentConversationId,
     createConversation,
+    resetNewTask,
     deleteConversation,
     batchDeleteConversations,
     loadConversations,
