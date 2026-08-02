@@ -5,7 +5,7 @@ import type { CheckpointTuple } from '@langchain/langgraph-checkpoint'
 /** 构造 CheckpointTuple（简化版，贴近 JsonPlusSerializer 反序列化结果） */
 function makeTuple(
   threadId: string,
-  messages: Array<{ id: string; role: string; content: string }>,
+  messages: Array<{ id: string; role: string; content: unknown }>,
   updatedAt: Date,
   createdAt: Date = updatedAt,
   workspace?: { id: string; name: string; dir?: string } | null
@@ -136,6 +136,69 @@ describe('ConversationStore（基于 LangGraph checkpointer 的会话服务）',
     expect(await store.getWorkspace('u1', 'c1')).toEqual({ id: 'ws-1', name: '项目A', dir: undefined })
     expect(await store.getWorkspace('u1', 'c2')).toBeNull()
     expect(await store.getWorkspace('u1', 'nonexistent')).toBeNull()
+  })
+
+  it('getMessages 解析 AI 消息块（text 拼接为正文、reasoning 提取为思考）', async () => {
+    const tuples = [
+      makeTuple('u:u1:c1', [
+        { id: 'msg-1', role: 'human', content: '你叫什么名字？' },
+        {
+          id: 'msg-2',
+          role: 'ai',
+          content: [
+            { type: 'reasoning', reasoning: '第一步思考' },
+            { type: 'text', text: '**你好**，我是 AI 助手。' },
+            { type: 'tool_use', id: 'call_1', name: 'ls', input: {} },
+            { type: 'reasoning', reasoning: '第二步思考' },
+            { type: 'text', text: '有什么可以帮你？' }
+          ]
+        }
+      ], new Date(100))
+    ]
+    const store = new ConversationStore(() => makeCheckpointer(tuples) as never)
+
+    const messages = await store.getMessages('u1', 'c1')
+    expect(messages).toEqual([
+      { id: 'msg-1', role: 'user', content: '你叫什么名字？' },
+      {
+        id: 'msg-2',
+        role: 'assistant',
+        content: '**你好**，我是 AI 助手。有什么可以帮你？',
+        reasoning: '第一步思考\n第二步思考'
+      }
+    ])
+  })
+
+  it('getMessages 处理空数组/非法 content（不抛错、返回空字符串）', async () => {
+    const tuples = [
+      makeTuple('u:u1:c1', [
+        { id: 'msg-1', role: 'human', content: 'hi' },
+        { id: 'msg-2', role: 'ai', content: [] },
+        { id: 'msg-3', role: 'ai', content: 42 },
+        { id: 'msg-4', role: 'ai', content: null }
+      ], new Date(100))
+    ]
+    const store = new ConversationStore(() => makeCheckpointer(tuples) as never)
+
+    const messages = await store.getMessages('u1', 'c1')
+    expect(messages.filter((m) => m.role === 'assistant').map((m) => m.content)).toEqual([
+      '',
+      '',
+      ''
+    ])
+  })
+
+  it('getMessages string content 原样返回（旧格式/用户消息，无 reasoning）', async () => {
+    const tuples = [
+      makeTuple('u:u1:c1', [
+        { id: 'msg-1', role: 'human', content: '你好' },
+        { id: 'msg-2', role: 'ai', content: '你好！有什么可以帮你？' }
+      ], new Date(100))
+    ]
+    const store = new ConversationStore(() => makeCheckpointer(tuples) as never)
+
+    const messages = await store.getMessages('u1', 'c1')
+    expect(messages[1]).toEqual({ id: 'msg-2', role: 'assistant', content: '你好！有什么可以帮你？' })
   })
 
   it('deleteConversation 用合成 thread_id 调 deleteThread', async () => {

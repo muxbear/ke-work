@@ -57,11 +57,12 @@ export interface Conversation {
   workspace?: ConversationWorkspace | null
 }
 
-/** 会话内消息（checkpoint 不保存 reasoning，历史重开不展示思考过程） */
+/** 会话内消息（checkpoint 中 AI 消息为消息块结构，reasoning 块提取为深度思考） */
 export interface ConversationMessage {
   id: string
   role: string
   content: string
+  reasoning?: string
 }
 
 export interface ConversationAPI {

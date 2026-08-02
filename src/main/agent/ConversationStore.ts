@@ -21,6 +21,32 @@ export interface ConversationMessage {
   id: string
   role: 'user' | 'assistant' | 'tool' | 'system'
   content: string
+  /** 深度思考内容（checkpoint 中 AI 消息 blocks 的 reasoning 块提取） */
+  reasoning?: string
+}
+
+/**
+ * 解析新版 LangChain 消息块 content（checkpoint 中 AI 消息 content 为 blocks 数组）：
+ * - `{ type: 'text', text }` 块拼接为正文（markdown）
+ * - `{ type: 'reasoning', reasoning }` 块提取为思考内容
+ * - tool_use 等其余块忽略
+ * string content 原样返回（旧格式/用户消息）
+ */
+function parseBlocks(content: unknown): { content: string; reasoning?: string } {
+  if (typeof content === 'string') return { content }
+  if (!Array.isArray(content)) return { content: '' }
+  const parts: string[] = []
+  const reasoningParts: string[] = []
+  for (const block of content) {
+    if (typeof block !== 'object' || block === null) continue
+    const b = block as { type?: string; text?: unknown; reasoning?: unknown }
+    if (b.type === 'text' && typeof b.text === 'string') parts.push(b.text)
+    else if (b.type === 'reasoning' && typeof b.reasoning === 'string') reasoningParts.push(b.reasoning)
+  }
+  return {
+    content: parts.join(''),
+    reasoning: reasoningParts.length ? reasoningParts.join('\n') : undefined
+  }
 }
 
 const THREAD_PREFIX = 'u:'
@@ -145,8 +171,14 @@ export class ConversationStore {
           default:
             return null
         }
-        const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
-        return { id: msg.id ?? '', role, content }
+        // checkpoint 中 AI 消息 content 为消息块数组（新版架构），解析为 markdown 正文 + 思考
+        const parsed = parseBlocks(msg.content)
+        return {
+          id: msg.id ?? '',
+          role,
+          content: parsed.content,
+          ...(parsed.reasoning ? { reasoning: parsed.reasoning } : {})
+        }
       })
       .filter((m): m is ConversationMessage => m !== null)
   }
