@@ -1,4 +1,4 @@
-import { createDeepAgent, FilesystemBackend, StoreBackend } from 'deepagents'
+import { createDeepAgent, LocalShellBackend, StoreBackend } from 'deepagents'
 import type { SubAgent, DeepAgent } from 'deepagents'
 import { SqliteSaver } from '@langchain/langgraph-checkpoint-sqlite'
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres'
@@ -9,13 +9,29 @@ import { SqliteStore } from './SqliteStore'
 /** 云端 PostgreSQL 连接串（生产环境经 secure-storage 读取） */
 const cloudPostgresConnString = process.env.CLOUD_POSTGRES_CONN_STRING ?? ''
 
-/** 按工作模式创建 backend（虚拟文件系统后端） */
-function createBackend(mode: WorkMode, workspaceDir: string) {
+/**
+ * 按工作模式创建 backend（虚拟文件系统后端）
+ *
+ * local 分支返回工厂函数而非实例：deepagents 每次工具调用时以运行期 runtime 调用工厂，
+ * 从 configurable.workspace_dir 解析当前会话的工作空间目录，为不同任务创建不同根目录的
+ * LocalShellBackend（同时获得 execute shell 工具能力）。
+ *
+ * ⚠️ LocalShellBackend 无沙箱（文档警告 unrestricted shell execution）；virtualMode: true
+ * 只约束文件操作、不限制 shell 命令，工作空间目录由主进程权威解析（渲染层只传 id）。
+ */
+function createBackend(mode: WorkMode, defaultWorkspaceDir: string) {
   if (mode === 'local') {
-    return new FilesystemBackend({
-      rootDir: workspaceDir,
-      virtualMode: true
-    })
+    return (runtime: {
+      configurable?: Record<string, unknown>
+      config?: { configurable?: Record<string, unknown> }
+    }): LocalShellBackend => {
+      const dir = String(
+        runtime.configurable?.workspace_dir ??
+          runtime.config?.configurable?.workspace_dir ??
+          defaultWorkspaceDir
+      )
+      return new LocalShellBackend({ rootDir: dir, virtualMode: true, inheritEnv: true })
+    }
   }
   return new StoreBackend({
     // 按用户身份隔离命名空间（user id 经 agent:send 的 configurable.user_id 注入）
@@ -49,7 +65,7 @@ export class AgentBuilder {
 
   constructor(
     mode: WorkMode,
-    private readonly workspaceDir: string,
+    private readonly defaultWorkspaceDir: string,
     private readonly checkpointDbPath: string,
     private readonly storeDbPath: string
   ) {
@@ -67,7 +83,7 @@ export class AgentBuilder {
    * 同步返回 this 以支持链式调用；异步的 store 创建延后到 build() 时 await
    */
   withModeDefaults(): this {
-    this.config.backend = createBackend(this.mode, this.workspaceDir)
+    this.config.backend = createBackend(this.mode, this.defaultWorkspaceDir)
     this.checkpointer = createCheckpointer(this.mode, this.checkpointDbPath)
     this.config.checkpointer = this.checkpointer
     this.storePromise = createStore(this.mode, this.storeDbPath)
@@ -149,9 +165,9 @@ export class AgentBuilder {
 /** 工厂入口：按工作模式创建带默认配置的建造者（同步返回，可立即链式调用） */
 export function createAgentBuilder(
   mode: WorkMode,
-  workspaceDir: string,
+  defaultWorkspaceDir: string,
   checkpointDbPath: string,
   storeDbPath: string
 ): AgentBuilder {
-  return new AgentBuilder(mode, workspaceDir, checkpointDbPath, storeDbPath).withModeDefaults()
+  return new AgentBuilder(mode, defaultWorkspaceDir, checkpointDbPath, storeDbPath).withModeDefaults()
 }

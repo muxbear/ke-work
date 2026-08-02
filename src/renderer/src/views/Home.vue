@@ -9,22 +9,22 @@ import AutomationPage from './AutomationPage.vue'
 import NewTaskPage from './NewTaskPage.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { useAgentStore } from '@renderer/store/agent'
+import { useWorkspaceStore } from '@renderer/store/workspace'
+import type { Conversation } from '@renderer/store/agent'
 
 const router = useRouter()
 const userStore = useUserStore()
 const agentStore = useAgentStore()
+const workspaceStore = useWorkspaceStore()
 
 // ── Sidebar state ──
 const sidebarCollapsed = ref(false)
 const spaceOpen = ref(true)
 const userMenuOpen = ref(false)
 const activeSpaceMenu = ref<string | null>(null)
-const activeChatMenu = ref<number | null>(null)
+const activeChatMenu = ref<string | null>(null)
 const userMenuRef = ref<HTMLElement | null>(null)
-const collapsedSpaces = reactive<Record<string, boolean>>({
-  'KE-WORK工作台': false,
-  研究助手: false
-})
+const collapsedSpaces = reactive<Record<string, boolean>>({})
 
 // ── Close menus on outside click ──
 const handleDocumentClick = (e: MouseEvent): void => {
@@ -48,25 +48,28 @@ const handleDocumentClick = (e: MouseEvent): void => {
 
 onMounted(() => {
   document.addEventListener('mousedown', handleDocumentClick)
+  // 加载工作空间列表与会话列表（空间分组数据源）
+  workspaceStore.load()
+  agentStore.loadConversations()
 })
 
 onUnmounted(() => {
   document.removeEventListener('mousedown', handleDocumentClick)
 })
 
-const toggleSpaceMenu = (spaceName: string): void => {
-  activeSpaceMenu.value = activeSpaceMenu.value === spaceName ? null : spaceName
+const toggleSpaceMenu = (spaceKey: string): void => {
+  activeSpaceMenu.value = activeSpaceMenu.value === spaceKey ? null : spaceKey
 }
 
-const toggleChatMenu = (chatId: number): void => {
+const toggleChatMenu = (chatId: string): void => {
   activeChatMenu.value = activeChatMenu.value === chatId ? null : chatId
 }
 
-const handleArchiveChat = (chatId: number): void => {
+const handleArchiveChat = (chatId: string): void => {
   console.log('Archive chat', chatId)
 }
 
-const handlePinChat = (chatId: number): void => {
+const handlePinChat = (chatId: string): void => {
   console.log('Pin chat', chatId)
 }
 
@@ -91,20 +94,58 @@ const navItems = [
   { label: '更多' as NavKey, icon: 'more', tag: '资库·灵感' }
 ]
 
-const recentChats = [
-  { id: 1, space: 'KE-WORK工作台', title: '继续 ardot 设计核心与系统…', time: '4天前', active: true },
-  { id: 2, space: 'KE-WORK工作台', title: '生成项目功能介绍', time: '6天前', active: false },
-  { id: 3, space: '研究助手', title: '市场调研数据分析报告', time: '昨天', active: false }
-]
+/** 会话按工作空间分组（无绑定归"默认空间"）；组内按更新时间降序 */
+interface ConversationGroup {
+  key: string
+  ws: Conversation['workspace'] | null
+  chats: Conversation[]
+}
 
-const spaces = computed(() => {
-  const map = new Map<string, typeof recentChats>()
-  recentChats.forEach((c) => {
-    if (!map.has(c.space)) map.set(c.space, [])
-    map.get(c.space)!.push(c)
-  })
-  return [...map.entries()]
+const conversationGroups = computed<ConversationGroup[]>(() => {
+  const map = new Map<string, ConversationGroup>()
+  for (const c of agentStore.sortedConversations) {
+    const key = c.workspace?.id ?? '__default__'
+    if (!map.has(key)) {
+      map.set(key, { key, ws: c.workspace ?? null, chats: [] })
+    }
+    map.get(key)!.chats.push(c)
+  }
+  return [...map.values()]
 })
+
+/** 点击会话回显历史（拉取消息 → 切到新建任务页；不能用 switchNav，它会新建会话） */
+const openConversation = async (id: string): Promise<void> => {
+  activeChatMenu.value = null
+  await agentStore.selectConversation(id)
+  activeNav.value = '新建任务'
+}
+
+/** 打开工作空间文件夹（默认空间无绑定，禁用） */
+const openWorkspaceDir = (ws: Conversation['workspace'] | null): void => {
+  if (ws?.id) workspaceStore.open(ws.id)
+}
+
+/** 删除会话（接 agentStore 已有 action） */
+const deleteChat = (id: string): void => {
+  activeChatMenu.value = null
+  agentStore.deleteConversation(id)
+}
+
+/** 相对时间格式化：今天 HH:mm / 昨天 / N天前 */
+const formatRelativeTime = (ts: number): string => {
+  if (!ts) return ''
+  const diff = Date.now() - ts
+  const minute = 60_000
+  const hour = 60 * minute
+  const day = 24 * hour
+  if (diff < minute) return '刚刚'
+  if (diff < hour) return `${Math.floor(diff / minute)}分钟前`
+  if (diff < day) return `${Math.floor(diff / hour)}小时前`
+  if (diff < 2 * day) return '昨天'
+  if (diff < 7 * day) return `${Math.floor(diff / day)}天前`
+  const d = new Date(ts)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 // ── Logout ──
 const showLogoutConfirm = ref(false)
@@ -206,15 +247,6 @@ const switchNav = (nav: NavKey): void => {
             </svg>
           </button>
         </div>
-        <!-- Search -->
-        <div class="sidebar-search">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round">
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.3-4.3" />
-          </svg>
-          <input type="text" placeholder="搜索..." class="sidebar-search-input" />
-        </div>
       </div>
 
       <!-- Navigation -->
@@ -281,13 +313,13 @@ const switchNav = (nav: NavKey): void => {
             stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <polyline points="6 9 12 15 18 9" />
           </svg>
-          <span>空间 ({{ spaces.length }})</span>
+          <span>空间 ({{ conversationGroups.length }})</span>
         </button>
         <Transition name="space-collapse">
           <div v-show="spaceOpen" class="spaces-list">
-            <div v-for="[spaceName, chats] in spaces" :key="spaceName" class="space-group">
+            <div v-for="group in conversationGroups" :key="group.key" class="space-group">
               <div class="space-header">
-                <svg v-if="spaceName === 'KE-WORK工作台'" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                <svg v-if="group.ws" width="12" height="12" viewBox="0 0 24 24" fill="none"
                   stroke="currentColor" stroke-width="2" stroke-linecap="round">
                   <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                 </svg>
@@ -299,11 +331,11 @@ const switchNav = (nav: NavKey): void => {
                   <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
                   <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
                 </svg>
-                <span>{{ spaceName }}</span>
+                <span>{{ group.ws?.name ?? '默认空间' }}</span>
                 <div class="space-header-right">
                   <div class="space-header-actions">
                     <button class="space-header-btn space-header-menu" type="button" data-space-menu-trigger
-                      aria-label="更多" title="更多" @click.stop="toggleSpaceMenu(spaceName)">
+                      aria-label="更多" title="更多" @click.stop="toggleSpaceMenu(group.key)">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round">
                         <circle cx="12" cy="5" r="1" />
@@ -312,8 +344,9 @@ const switchNav = (nav: NavKey): void => {
                       </svg>
                     </button>
                     <Transition name="dropdown">
-                      <div v-if="activeSpaceMenu === spaceName" class="space-menu">
-                        <button class="space-menu-item" type="button">
+                      <div v-if="activeSpaceMenu === group.key" class="space-menu">
+                        <button class="space-menu-item" type="button" :disabled="!group.ws"
+                          @click="openWorkspaceDir(group.ws)">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round">
                             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
@@ -331,7 +364,7 @@ const switchNav = (nav: NavKey): void => {
                       </div>
                     </Transition>
                     <button class="space-header-btn space-header-add" type="button" title="添加子项"
-                      @click.stop="handleAddSpaceItem(spaceName)">
+                      @click.stop="handleAddSpaceItem(group.ws?.name ?? '默认空间')">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round">
                         <line x1="12" y1="5" x2="12" y2="19" />
@@ -340,9 +373,9 @@ const switchNav = (nav: NavKey): void => {
                     </button>
                   </div>
                   <button class="space-header-btn space-header-collapse" type="button"
-                    :class="{ 'space-header-collapse--collapsed': collapsedSpaces[spaceName] }"
-                    :aria-expanded="!collapsedSpaces[spaceName]" title="折叠 / 展开"
-                    @click.stop="toggleSpaceCollapse(spaceName)">
+                    :class="{ 'space-header-collapse--collapsed': collapsedSpaces[group.key] }"
+                    :aria-expanded="!collapsedSpaces[group.key]" title="折叠 / 展开"
+                    @click.stop="toggleSpaceCollapse(group.key)">
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                       stroke-linecap="round">
                       <polyline points="6 9 12 15 18 9" />
@@ -351,8 +384,10 @@ const switchNav = (nav: NavKey): void => {
                 </div>
               </div>
               <Transition name="space-collapse">
-                <div v-show="!collapsedSpaces[spaceName]" class="space-children">
-                  <div v-for="chat in chats" :key="chat.id" class="space-chat">
+                <div v-show="!collapsedSpaces[group.key]" class="space-children">
+                  <div v-for="chat in group.chats" :key="chat.id"
+                    :class="['space-chat', { 'space-chat--active': chat.id === agentStore.currentConversationId }]"
+                    @click="openConversation(chat.id)">
                     <div class="space-chat-main">
                       <p class="space-chat-title">{{ chat.title }}</p>
                     </div>
@@ -384,7 +419,8 @@ const switchNav = (nav: NavKey): void => {
                               </svg>
                               重命名
                             </button>
-                            <button class="chat-menu-item chat-menu-item--danger" type="button">
+                            <button class="chat-menu-item chat-menu-item--danger" type="button"
+                              @click="deleteChat(chat.id)">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2" stroke-linecap="round">
                                 <polyline points="3 6 5 6 21 6" />
@@ -413,7 +449,7 @@ const switchNav = (nav: NavKey): void => {
                         </svg>
                       </button>
                     </div>
-                    <p class="space-chat-time">{{ chat.time }}</p>
+                    <p class="space-chat-time">{{ formatRelativeTime(chat.updateAt) }}</p>
                   </div>
                 </div>
               </Transition>
@@ -663,33 +699,6 @@ const switchNav = (nav: NavKey): void => {
 .sidebar-collapse-btn:hover {
   background: rgba(8, 145, 178, 0.1);
   color: #6b7f95;
-}
-
-/* Search */
-.sidebar-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: rgba(8, 145, 178, 0.06);
-  border: 1px solid rgba(8, 145, 178, 0.1);
-  color: #9ca3af;
-}
-
-.sidebar-search-input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  outline: none;
-  font-size: 12px;
-  font-family: inherit;
-  color: #374151;
-  min-width: 0;
-}
-
-.sidebar-search-input::placeholder {
-  color: #9ca3af;
 }
 
 /* New Task button */
@@ -1018,6 +1027,20 @@ const switchNav = (nav: NavKey): void => {
 
 .space-chat:hover {
   background: rgba(8, 145, 178, 0.04);
+}
+
+.space-chat--active {
+  background: rgba(8, 145, 178, 0.1);
+}
+
+.space-chat--active .space-chat-title {
+  color: #0891b2;
+  font-weight: 500;
+}
+
+.space-menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .space-chat-main {

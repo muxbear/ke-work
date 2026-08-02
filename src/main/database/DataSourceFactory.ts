@@ -7,6 +7,7 @@ import type { IAuthRepository } from './interfaces/IAuthRepository'
 import { LocalDataSource } from './local/LocalDataSource'
 import { LocalConfigRepository } from './local/LocalConfigRepository'
 import { LocalAuthRepository } from './local/LocalAuthRepository'
+import { WorkspaceRepository } from '../workspace/WorkspaceRepository'
 import { CloudDataSource, type CloudTokenStore } from './cloud/CloudDataSource'
 import { CloudAuthRepository } from './cloud/CloudAuthRepository'
 import { CloudConfigRepository } from './cloud/CloudConfigRepository'
@@ -93,6 +94,11 @@ export class DataSourceFactory {
     return this.mode === 'local'
       ? new LocalAuthRepository(this.getLocalDataSource())
       : new CloudAuthRepository(this.getCloudDataSource())
+  }
+
+  /** 工作空间仓储（机器级资源，与工作模式无关，复用本地连接） */
+  createWorkspaceRepository(): WorkspaceRepository {
+    return new WorkspaceRepository(this.getLocalDataSource().getDb())
   }
 
   private getLocalDataSource(): LocalDataSource {

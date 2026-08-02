@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useAgentStore } from '@store/agent'
+import { useWorkspaceStore } from '@store/workspace'
 import MessageContent from '@components/MessageContent.vue'
+import ChatSidePanel from '@components/ChatSidePanel.vue'
 
 const agentStore = useAgentStore()
+const workspaceStore = useWorkspaceStore()
 
 // 通过本地 computed 包装 agentStore，建立正确的 Vue 响应式依赖链
 const currentMessages = computed(() => agentStore.currentMessages)
@@ -19,33 +22,193 @@ const showInputPlusMenu = ref(false)
 const chipsScrollRef = ref<HTMLElement | null>(null)
 const bottomRef = ref<HTMLElement | null>(null)
 
+// ── Workspace selector 状态 ──
+const wsMenuOpen = ref(false)
+const showCreateModal = ref(false)
+const createName = ref('')
+const createError = ref('')
+const creating = ref(false)
+
+// ── Chat 态右侧栏 ──
+const panelFullscreen = ref(false)
+
+// ── AI 消息操作栏 ──
+const toast = ref('')
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+const showToast = (text: string): void => {
+  toast.value = text
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => {
+    toast.value = ''
+  }, 1500)
+}
+
+/** 点赞/点踩本地状态（按消息 id） */
+const feedbackMap = ref<Record<string, 'up' | 'down' | null>>({})
+const toggleFeedback = (msgId: string, kind: 'up' | 'down'): void => {
+  const cur = feedbackMap.value[msgId]
+  feedbackMap.value[msgId] = cur === kind ? null : kind
+}
+
+/** 复制文本到剪贴板（clipboard + execCommand fallback） */
+async function copyText(text: string, okText = '已复制'): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
+  showToast(okText)
+}
+
+/** 朗读 AI 回复（Web Speech API；无引擎降级提示） */
+const speakingMsgId = ref<string | null>(null)
+const toggleSpeak = (msg: { id: string; content: string }): void => {
+  if (!('speechSynthesis' in window)) {
+    showToast('当前环境不支持语音朗读')
+    return
+  }
+  if (speakingMsgId.value === msg.id) {
+    window.speechSynthesis.cancel()
+    speakingMsgId.value = null
+    return
+  }
+  window.speechSynthesis.cancel()
+  const utter = new SpeechSynthesisUtterance(msg.content)
+  utter.lang = 'zh-CN'
+  speakingMsgId.value = msg.id
+  utter.onend = () => {
+    speakingMsgId.value = null
+  }
+  utter.onerror = () => {
+    speakingMsgId.value = null
+  }
+  window.speechSynthesis.speak(utter)
+  // 降级：speak 后 1.5s 未进入朗读状态视为不支持
+  setTimeout(() => {
+    if (speakingMsgId.value === msg.id && !window.speechSynthesis.speaking) {
+      speakingMsgId.value = null
+      showToast('当前环境不支持语音朗读')
+    }
+  }, 1500)
+}
+
+/** 分享会话：全部消息拼文本复制 */
+const shareConversation = (): void => {
+  const text = messages.value
+    .map((m) => (m.role === 'user' ? `[用户] ${m.content}` : `[AI] ${m.content}`))
+    .filter((t) => t.trim().length > 0)
+    .join('\n\n')
+  if (!text) return
+  copyText(text, '会话内容已复制')
+}
+
+// ── 格式化工具 ──
+const formatDuration = (ms: number): string => {
+  if (ms < 1000) return '共 <1s'
+  if (ms < 60_000) return `共 ${(ms / 1000).toFixed(1)}s`
+  const m = Math.floor(ms / 60_000)
+  const s = Math.floor((ms % 60_000) / 1000)
+  return `共 ${m}m ${s}s`
+}
+
+const formatTime = (ts: number): string => {
+  const d = new Date(ts)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+// ── 历史提问下拉 ──
+const historyMenuOpen = ref(false)
+const historyQuestions = computed(() =>
+  messages.value.filter((m) => m.role === 'user').slice().reverse()
+)
+
+// ── 对话内搜索 ──
+const searchOpen = ref(false)
+const searchKeyword = ref('')
+const searchIndex = ref(0)
+const suppressAutoScroll = ref(false)
+
+const searchMatches = computed(() => {
+  const kw = searchKeyword.value.trim().toLowerCase()
+  if (!kw) return []
+  return messages.value.filter(
+    (m) => m.content.toLowerCase().includes(kw) || (m.reasoning ?? '').toLowerCase().includes(kw)
+  )
+})
+
+watch(searchKeyword, () => {
+  searchIndex.value = 0
+})
+
+const hitSet = computed(() => new Set(searchMatches.value.map((m) => m.id)))
+const currentHitId = computed(() => searchMatches.value[searchIndex.value]?.id ?? null)
+
+/** 滚动定位到消息（suppressAutoScroll 防与底部自动滚动竞争） */
+const scrollToMsg = (id: string): void => {
+  suppressAutoScroll.value = true
+  nextTick(() => {
+    document
+      .querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(id)}"]`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setTimeout(() => {
+      suppressAutoScroll.value = false
+    }, 600)
+  })
+}
+
+const gotoSearch = (dir: 1 | -1): void => {
+  const total = searchMatches.value.length
+  if (total === 0) return
+  searchIndex.value = (searchIndex.value + dir + total) % total
+  const target = searchMatches.value[searchIndex.value]
+  if (target) scrollToMsg(target.id)
+}
+
+const jumpToQuestion = (id: string): void => {
+  historyMenuOpen.value = false
+  scrollToMsg(id)
+}
+
+/** 重新生成最后一条回复 */
+const regenerateLast = (): void => {
+  agentStore.regenerate({ model: model.value })
+}
+
 // ── Computed ──
 const messages = computed(() => {
-  const msgs = currentMessages.value.map((m) => ({
+  return currentMessages.value.map((m) => ({
+    id: m.id,
     role: m.role as 'user' | 'assistant',
     content: m.content,
-    reasoning: m.reasoning
+    reasoning: m.reasoning,
+    createdAt: m.createdAt,
+    durationMs: m.durationMs,
+    model: m.model
   }))
-  console.log('[NewTaskPage] messages computed, count:', msgs.length, 'roles:', msgs.map(m => m.role))
-  return msgs
 })
 const thinking = computed(() => {
   const val = isStreaming.value || isThinking.value
-  console.log('[NewTaskPage] thinking computed:', val)
   return val
 })
 
-// 思考块折叠状态：记录每个消息 index 的折叠状态
-const thinkingCollapsed = ref<Record<number, boolean>>({})
+// 思考块折叠状态：按消息 id 记录（regenerate 截断后 index 会错位）
+const thinkingCollapsed = ref<Record<string, boolean>>({})
 
-const toggleThinking = (index: number): void => {
-  thinkingCollapsed.value[index] = !thinkingCollapsed.value[index]
+const toggleThinking = (msgId: string): void => {
+  thinkingCollapsed.value[msgId] = !thinkingCollapsed.value[msgId]
 }
 
-const isLastAssistant = (index: number): boolean => {
+const isLastAssistant = (msgId: string): boolean => {
   for (let i = messages.value.length - 1; i >= 0; i--) {
     if (messages.value[i].role === 'assistant') {
-      return i === index
+      return messages.value[i].id === msgId
     }
   }
   return false
@@ -86,7 +249,7 @@ const sendMessage = (): void => {
   const content = taskInput.value.trim()
   taskInput.value = ''
   agentStore
-    .sendMessage(content)
+    .sendMessage(content, { model: model.value })
     .catch((err: unknown) => {
       console.error('[NewTaskPage] sendMessage failed:', err)
       // 失败时恢复输入内容，避免用户输入丢失且无反馈
@@ -94,11 +257,62 @@ const sendMessage = (): void => {
     })
 }
 
-// ── Close plus menu on outside click ──
+// ── Workspace selector handlers ──
+
+/** 选中列表中的工作空间 */
+const pickWorkspace = (ws: { id: string }): void => {
+  workspaceStore.select(ws.id)
+  wsMenuOpen.value = false
+}
+
+/** 打开本地文件夹作为工作空间 */
+const pickExternal = async (): Promise<void> => {
+  wsMenuOpen.value = false
+  await workspaceStore.selectExternal()
+}
+
+/** 不使用工作空间（~/KeWork/<时间戳> 目录） */
+const pickTimestamp = async (): Promise<void> => {
+  wsMenuOpen.value = false
+  await workspaceStore.useTimestamp()
+}
+
+/** 打开"新建工作空间"弹窗 */
+const openCreateModal = (): void => {
+  wsMenuOpen.value = false
+  createName.value = ''
+  createError.value = ''
+  showCreateModal.value = true
+}
+
+/** 确认创建：主进程 sanitize 是权威校验，错误经 createError 展示 */
+const confirmCreate = async (): Promise<void> => {
+  const name = createName.value.trim()
+  if (!name || creating.value) return
+  creating.value = true
+  createError.value = ''
+  try {
+    await workspaceStore.create(name)
+    showCreateModal.value = false
+    createName.value = ''
+  } catch (err) {
+    createError.value = err instanceof Error ? err.message : '新建工作空间失败'
+  } finally {
+    creating.value = false
+  }
+}
+
+// ── Close menus on outside click ──
 const handleDocumentClick = (e: MouseEvent): void => {
   const target = e.target as HTMLElement
   if (!target.closest('[data-plus-menu-trigger]') && !target.closest('.plus-menu')) {
     showInputPlusMenu.value = false
+  }
+  if (!target.closest('[data-workspace-menu-trigger]') && !target.closest('.workspace-menu')) {
+    wsMenuOpen.value = false
+  }
+  if (!target.closest('[data-history-menu-trigger]') && !target.closest('.history-menu')) {
+    historyMenuOpen.value = false
   }
 }
 
@@ -108,12 +322,14 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('mousedown', handleDocumentClick)
+  if ('speechSynthesis' in window) window.speechSynthesis.cancel()
 })
 
-// 消息更新时自动滚动到底部
+// 消息更新时自动滚动到底部（搜索/历史提问定位期间抑制）
 watch(
   () => [currentMessages.value.length, isStreaming.value],
   () => {
+    if (suppressAutoScroll.value) return
     nextTick(() => bottomRef.value?.scrollIntoView({ behavior: 'smooth' }))
   }
 )
@@ -356,15 +572,75 @@ watch(
         </div>
 
         <div class="input-footer">
-          <button class="footer-action">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-            </svg>
-            选择工作空间
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
+          <div class="workspace-selector">
+            <button class="footer-action" data-workspace-menu-trigger @click="wsMenuOpen = !wsMenuOpen">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+              </svg>
+              {{ workspaceStore.currentWorkspace?.name ?? '选择工作空间' }}
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+            <Transition name="plus-menu-slide">
+              <div v-if="wsMenuOpen" class="workspace-menu" @click.stop>
+                <!-- ① 搜索工作空间 -->
+                <div class="ws-search">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.3-4.3" />
+                  </svg>
+                  <input v-model="workspaceStore.query" type="text" placeholder="搜索工作空间" class="ws-search-input" />
+                </div>
+                <!-- ② 已创建工作空间列表 -->
+                <div class="ws-list">
+                  <button v-for="ws in workspaceStore.filteredWorkspaces" :key="ws.id" class="ws-item"
+                    @click="pickWorkspace(ws)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      class="ws-item-icon">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <span class="ws-item-name">{{ ws.name }}</span>
+                    <svg v-if="ws.id === workspaceStore.currentId" width="11" height="11" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" stroke-width="3" class="ws-item-check">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </button>
+                  <p v-if="workspaceStore.filteredWorkspaces.length === 0" class="ws-empty">无匹配的工作空间</p>
+                </div>
+                <div class="ws-divider"></div>
+                <!-- ③ 新建工作空间 -->
+                <button class="ws-item" @click="openCreateModal">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    class="ws-item-icon">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    <line x1="12" y1="11" x2="12" y2="17" />
+                    <line x1="9" y1="14" x2="15" y2="14" />
+                  </svg>
+                  <span class="ws-item-name">新建工作空间</span>
+                </button>
+                <!-- ④ 打开本地文件夹 -->
+                <button class="ws-item" @click="pickExternal">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    class="ws-item-icon">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                  </svg>
+                  <span class="ws-item-name">打开本地文件夹</span>
+                </button>
+                <!-- ⑤ 不使用工作空间 -->
+                <button class="ws-item" @click="pickTimestamp">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    class="ws-item-icon">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  <span class="ws-item-name">不使用工作空间</span>
+                </button>
+              </div>
+            </Transition>
+          </div>
           <button class="footer-action">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="11" width="18" height="11" rx="2" />
@@ -377,52 +653,250 @@ watch(
           </button>
         </div>
       </div>
+
+      <!-- 新建工作空间 Modal -->
+      <Transition name="modal">
+        <div v-if="showCreateModal" class="modal-mask" @click.self="showCreateModal = false">
+          <div class="modal-card">
+            <div class="modal-header">
+              <span>新建工作空间</span>
+              <button class="modal-close" aria-label="关闭" @click="showCreateModal = false">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div class="modal-body">
+              <label class="modal-label" for="ws-create-name">工作空间名称</label>
+              <input id="ws-create-name" v-model="createName" class="modal-input" maxlength="50"
+                placeholder="将创建于 ~/KeWork/ 目录下" @keydown.enter.prevent="confirmCreate" />
+              <p v-if="createError" class="modal-error">{{ createError }}</p>
+              <p class="modal-hint">将在系统家目录的 KeWork/ 下创建同名文件夹</p>
+            </div>
+            <div class="modal-footer">
+              <button class="modal-btn modal-btn--cancel" @click="showCreateModal = false">取消</button>
+              <button class="modal-btn modal-btn--confirm" :disabled="creating || !createName.trim()"
+                @click="confirmCreate">创建</button>
+            </div>
+          </div>
+        </div>
+      </Transition>
     </div>
 
     <!-- Chat state -->
     <div v-else class="chat-area">
-      <div class="chat-messages">
-        <div v-for="(msg, i) in messages" :key="i"
-          :class="['chat-bubble-row', { 'chat-bubble-row--user': msg.role === 'user' }]">
-          <div v-if="msg.role === 'assistant'" class="chat-avatar chat-avatar--ai">
-            <svg width="20" height="20" viewBox="0 0 64 64" fill="none">
-              <ellipse cx="32" cy="38" rx="12" ry="14" fill="#0891b2" />
-              <circle cx="32" cy="20" r="9" fill="#0891b2" />
-              <circle cx="29" cy="19" r="2.5" fill="white" />
-              <circle cx="29.5" cy="19" r="1.2" fill="#0e7490" />
+      <div v-show="!panelFullscreen" class="chat-main">
+      <!-- 会话标题栏 -->
+      <header class="chat-header">
+        <h1 class="chat-header-title">{{ agentStore.currentConversation?.title ?? '新对话' }}</h1>
+        <div class="chat-header-actions">
+          <button class="chat-header-btn" title="对话内搜索" :class="{ 'chat-header-btn--active': searchOpen }"
+            @click="searchOpen = !searchOpen">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
             </svg>
-          </div>
-          <div class="chat-bubble-wrapper">
-            <!-- 深度思考块 -->
-            <div v-if="msg.reasoning" class="thinking-block">
-              <button class="thinking-header" @click="toggleThinking(i)">
-                <span class="thinking-header-text">深度思考</span>
-                <svg :class="['thinking-chevron', { 'thinking-chevron--collapsed': thinkingCollapsed[i] }]" width="14"
-                  height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round">
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
-              <Transition name="thinking-collapse">
-                <div v-show="!thinkingCollapsed[i]" class="thinking-body">
-                  <MessageContent :content="msg.reasoning" content-type="markdown" />
+          </button>
+          <button class="chat-header-btn" title="分享" @click="shareConversation">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round">
+              <circle cx="18" cy="5" r="3" />
+              <circle cx="6" cy="12" r="3" />
+              <circle cx="18" cy="19" r="3" />
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+            </svg>
+          </button>
+          <div class="chat-header-btn-wrap" data-history-menu-trigger>
+            <button class="chat-header-btn" title="历史提问" @click="historyMenuOpen = !historyMenuOpen">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+            </button>
+            <Transition name="dropdown">
+              <div v-if="historyMenuOpen" class="history-menu">
+                <p class="history-menu-title">历史提问 ({{ historyQuestions.length }})</p>
+                <div class="history-menu-list">
+                  <button v-for="q in historyQuestions" :key="q.id" class="history-menu-item"
+                    @click="jumpToQuestion(q.id)">
+                    <span class="history-menu-text">{{ q.content }}</span>
+                    <span v-if="q.createdAt" class="history-menu-time">{{ formatTime(q.createdAt) }}</span>
+                  </button>
+                  <p v-if="historyQuestions.length === 0" class="history-menu-empty">暂无提问</p>
                 </div>
-              </Transition>
-            </div>
-            <!-- 消息内容：有内容时渲染，空内容+流式输出时显示加载动画 -->
-            <div v-if="msg.content" :class="['chat-bubble', { 'chat-bubble--user': msg.role === 'user' }]">
-              <MessageContent :content="msg.content" content-type="markdown" />
-            </div>
-            <div v-else-if="isLastAssistant(i) && thinking" class="chat-bubble thinking-bubble">
-              <span class="dot-pulse" style="animation-delay: 0s"></span>
-              <span class="dot-pulse" style="animation-delay: 0.15s"></span>
-              <span class="dot-pulse" style="animation-delay: 0.3s"></span>
-            </div>
+              </div>
+            </Transition>
           </div>
-          <div v-if="msg.role === 'user'" class="chat-avatar chat-avatar--user">鸾</div>
+        </div>
+      </header>
+
+      <!-- 对话内搜索条 -->
+      <Transition name="dropdown">
+        <div v-if="searchOpen" class="chat-search-bar">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <input v-model="searchKeyword" class="chat-search-input" placeholder="搜索当前对话" />
+          <span class="chat-search-count">{{ searchMatches.length ? searchIndex + 1 : 0 }}/{{ searchMatches.length }}</span>
+          <button class="chat-search-btn" title="上一条" :disabled="!searchMatches.length" @click="gotoSearch(-1)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round">
+              <polyline points="18 15 12 9 6 15" />
+            </svg>
+          </button>
+          <button class="chat-search-btn" title="下一条" :disabled="!searchMatches.length" @click="gotoSearch(1)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          <button class="chat-search-btn" title="关闭"
+            @click="searchOpen = false; searchKeyword = ''">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      </Transition>
+
+      <div class="chat-messages">
+        <div v-for="msg in messages" :key="msg.id" :data-msg-id="msg.id"
+          :class="['chat-bubble-row', msg.role === 'user' ? 'chat-bubble-row--user' : 'chat-bubble-row--assistant',
+            { 'chat-msg--hit': hitSet.has(msg.id), 'chat-msg--current': currentHitId === msg.id }]">
+          <!-- AI 回复：头像+名字在顶部，正文无背景色，底部操作栏 -->
+          <template v-if="msg.role === 'assistant'">
+            <div class="chat-bubble-head">
+              <div class="chat-avatar chat-avatar--ai chat-avatar--sm">
+                <svg width="16" height="16" viewBox="0 0 64 64" fill="none">
+                  <ellipse cx="32" cy="38" rx="12" ry="14" fill="#0891b2" />
+                  <circle cx="32" cy="20" r="9" fill="#0891b2" />
+                  <circle cx="29" cy="19" r="2.5" fill="white" />
+                  <circle cx="29.5" cy="19" r="1.2" fill="#0e7490" />
+                </svg>
+              </div>
+              <span class="chat-bubble-head-name">KeWork</span>
+            </div>
+            <div class="chat-bubble-wrapper">
+              <!-- 深度思考块 -->
+              <div v-if="msg.reasoning" class="thinking-block">
+                <button class="thinking-header" @click="toggleThinking(msg.id)">
+                  <span class="thinking-header-text">深度思考</span>
+                  <svg :class="['thinking-chevron', { 'thinking-chevron--collapsed': thinkingCollapsed[msg.id] }]"
+                    width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+                <Transition name="thinking-collapse">
+                  <div v-show="!thinkingCollapsed[msg.id]" class="thinking-body">
+                    <MessageContent :content="msg.reasoning" content-type="markdown" />
+                  </div>
+                </Transition>
+              </div>
+              <!-- 消息内容：有内容时渲染，空内容+流式输出时显示加载动画 -->
+              <div v-if="msg.content" class="chat-bubble">
+                <MessageContent :content="msg.content" content-type="markdown" />
+              </div>
+              <div v-else-if="isLastAssistant(msg.id) && thinking" class="chat-bubble thinking-bubble">
+                <span class="dot-pulse" style="animation-delay: 0s"></span>
+                <span class="dot-pulse" style="animation-delay: 0.15s"></span>
+                <span class="dot-pulse" style="animation-delay: 0.3s"></span>
+              </div>
+            </div>
+            <!-- 操作栏：按钮组 + 元信息 -->
+            <div v-if="msg.content" class="chat-msg-actions">
+              <div class="chat-msg-action-group">
+                <button class="chat-msg-action-btn" title="复制" @click="copyText(msg.content)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                </button>
+                <button class="chat-msg-action-btn" :class="{ 'chat-msg-action-btn--active': feedbackMap[msg.id] === 'up' }"
+                  title="点赞" @click="toggleFeedback(msg.id, 'up')">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round">
+                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+                  </svg>
+                </button>
+                <button class="chat-msg-action-btn"
+                  :class="{ 'chat-msg-action-btn--active': feedbackMap[msg.id] === 'down' }" title="点踩"
+                  @click="toggleFeedback(msg.id, 'down')">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round">
+                    <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zM17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
+                  </svg>
+                </button>
+                <button class="chat-msg-action-btn"
+                  :class="{ 'chat-msg-action-btn--active': speakingMsgId === msg.id }" title="朗读"
+                  @click="toggleSpeak(msg)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                  </svg>
+                </button>
+                <button class="chat-msg-action-btn" title="重新生成" :disabled="isStreaming || !isLastAssistant(msg.id)"
+                  @click="regenerateLast">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round">
+                    <polyline points="23 4 23 10 17 10" />
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                  </svg>
+                </button>
+                <button class="chat-msg-action-btn" title="分享" @click="copyText(msg.content)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round">
+                    <circle cx="18" cy="5" r="3" />
+                    <circle cx="6" cy="12" r="3" />
+                    <circle cx="18" cy="19" r="3" />
+                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                  </svg>
+                </button>
+                <button class="chat-msg-action-btn" title="更多">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round">
+                    <circle cx="12" cy="5" r="1" />
+                    <circle cx="12" cy="12" r="1" />
+                    <circle cx="12" cy="19" r="1" />
+                  </svg>
+                </button>
+              </div>
+              <div class="chat-msg-meta">
+                <span v-if="msg.durationMs" class="chat-msg-meta-item chat-msg-meta-item--strong">
+                  {{ formatDuration(msg.durationMs) }}
+                </span>
+                <span class="chat-msg-meta-item">{{ msg.model ?? model }}</span>
+                <span v-if="msg.createdAt" class="chat-msg-meta-item">{{ formatTime(msg.createdAt) }}</span>
+              </div>
+            </div>
+          </template>
+          <!-- 用户消息：无头像，浅灰背景 -->
+          <template v-else>
+            <div class="chat-bubble-wrapper chat-bubble-wrapper--user">
+              <div class="chat-bubble chat-bubble--user">
+                <MessageContent :content="msg.content" content-type="markdown" />
+              </div>
+            </div>
+          </template>
         </div>
         <div ref="bottomRef"></div>
       </div>
+      <!-- Toast -->
+      <Transition name="dropdown">
+        <div v-if="toast" class="chat-toast">{{ toast }}</div>
+      </Transition>
       <!-- Compact input -->
       <div class="chat-input-bar">
         <div class="chat-input-card">
@@ -522,6 +996,8 @@ watch(
           </div>
         </div>
       </div>
+      </div>
+      <ChatSidePanel v-model:fullscreen="panelFullscreen" />
     </div>
   </div>
 </template>
@@ -939,6 +1415,256 @@ watch(
   color: #94a3b8;
 }
 
+/* Workspace selector */
+.workspace-selector {
+  position: relative;
+}
+
+.workspace-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  width: 260px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.1), 0 4px 20px rgba(0, 0, 0, 0.08);
+  padding: 6px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ws-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  background: rgba(8, 145, 178, 0.06);
+  border: 1px solid rgba(8, 145, 178, 0.1);
+  color: #9ca3af;
+  margin-bottom: 4px;
+}
+
+.ws-search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 12px;
+  font-family: inherit;
+  color: #374151;
+  min-width: 0;
+}
+
+.ws-search-input::placeholder {
+  color: #9ca3af;
+}
+
+.ws-list {
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ws-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 7px;
+  color: #1e293b;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease;
+}
+
+.ws-item:hover {
+  background: #f1f5f9;
+}
+
+.ws-item-icon {
+  flex-shrink: 0;
+  color: #64748b;
+}
+
+.ws-item-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ws-item-check {
+  flex-shrink: 0;
+  color: #0891b2;
+}
+
+.ws-empty {
+  margin: 0;
+  padding: 10px;
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.ws-divider {
+  margin: 4px 6px;
+  border-top: 1px solid #eef2f7;
+}
+
+/* 新建工作空间 Modal */
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.modal-card {
+  width: 360px;
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2);
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a2332;
+}
+
+.modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.modal-close:hover {
+  background: #f3f4f6;
+}
+
+.modal-body {
+  padding: 0 20px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modal-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.modal-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1px solid #d1d9e6;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #1a2332;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.modal-input:focus {
+  border-color: #0891b2;
+  box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.12);
+}
+
+.modal-error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #ef4444;
+}
+
+.modal-hint {
+  margin: 0;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 20px 16px;
+}
+
+.modal-btn {
+  padding: 8px 18px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.modal-btn--cancel {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.modal-btn--cancel:hover {
+  background: #e5e7eb;
+}
+
+.modal-btn--confirm {
+  background: linear-gradient(135deg, #0891b2, #0e7490);
+  color: #ffffff;
+}
+
+.modal-btn--confirm:hover {
+  opacity: 0.9;
+}
+
+.modal-btn--confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Modal transition */
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+
 /* Plus-menu transition */
 .plus-menu-slide-enter-active {
   transition: all 0.2s ease-out;
@@ -965,6 +1691,15 @@ watch(
 .chat-area {
   flex: 1;
   display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+/* 左侧对话+输入列（全屏右侧栏时隐藏） */
+.chat-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
   flex-direction: column;
   overflow: hidden;
 }
@@ -977,6 +1712,10 @@ watch(
   flex-direction: column;
   gap: 16px;
   scrollbar-width: none;
+  /* 靠中间对齐 + 两侧留白（max-width 与 margin auto 必须同写） */
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
 }
 
 .chat-messages::-webkit-scrollbar {
@@ -987,12 +1726,31 @@ watch(
   display: flex;
   gap: 12px;
   align-items: flex-start;
+  border-radius: 10px;
+  transition: background-color 0.15s ease;
+}
+
+/* 搜索高亮：命中行淡黄、当前定位行深黄 */
+.chat-msg--hit {
+  background: #fffbe6;
+}
+
+.chat-msg--current {
+  background: #fef3c7;
 }
 
 .chat-bubble-row--user {
   justify-content: flex-end;
 }
 
+/* AI 回复行纵向化：头部（头像+名字）在上，正文中，操作栏在下 */
+.chat-bubble-row--assistant {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+
+/* AI 头像：顶部头部行内的小尺寸 */
 .chat-avatar {
   width: 32px;
   height: 32px;
@@ -1004,41 +1762,61 @@ watch(
   margin-top: 2px;
 }
 
+.chat-avatar--sm {
+  width: 20px;
+  height: 20px;
+  margin-top: 0;
+}
+
 .chat-avatar--ai {
   background: linear-gradient(135deg, #0891b2, #0e7490);
 }
 
-.chat-avatar--user {
-  background: linear-gradient(135deg, #0891b2, #0e7490);
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 700;
+/* AI 消息头部行：头像 + "KeWork" 文字 */
+.chat-bubble-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
+.chat-bubble-head-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a2332;
+}
+
+/* 正文：无背景色（接近左侧白底） */
 .chat-bubble {
-  padding: 12px 16px;
+  padding: 0;
   border-radius: 18px;
   font-size: 14px;
   line-height: 1.6;
-  background: #f5f9fb;
+  background: transparent;
   color: #1a2332;
-  border-bottom-left-radius: 4px;
 }
 
+/* 用户消息：浅灰背景 */
 .chat-bubble--user {
-  background: linear-gradient(135deg, #0891b2, #0e7490);
-  color: #ffffff;
+  background: #f3f4f6;
+  color: #1a2332;
   border-radius: 18px;
   border-bottom-right-radius: 4px;
+  padding: 12px 16px;
 }
 
 /* Chat bubble wrapper (for reasoning + content layout) */
 .chat-bubble-wrapper {
-  max-width: 70%;
+  width: 100%;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  /* 思考消息与正式消息的间隔 */
+  gap: 16px;
+}
+
+.chat-bubble-wrapper--user {
+  align-items: flex-end;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1092,8 +1870,26 @@ watch(
   padding: 6px 14px 10px;
   font-size: 13px;
   line-height: 1.6;
-  color: #4b5563;
+  /* 思考消息：淡灰文字，hover 变深灰 */
+  color: #9ca3af;
   border-top: 1px solid rgba(8, 145, 178, 0.06);
+  transition: color 0.15s ease;
+}
+
+.thinking-block:hover .thinking-body {
+  color: #6b7280;
+}
+
+/* 思考块内嵌元素颜色统一为淡灰（保留 code/pre 原配色保证可读性） */
+.thinking-body :deep(.message-content--rich p),
+.thinking-body :deep(.message-content--rich li),
+.thinking-body :deep(.message-content--rich strong),
+.thinking-body :deep(.message-content--rich td),
+.thinking-body :deep(.message-content--rich h1),
+.thinking-body :deep(.message-content--rich h2),
+.thinking-body :deep(.message-content--rich h3),
+.thinking-body :deep(.message-content--rich h4) {
+  color: inherit;
 }
 
 /* Thinking collapse transition */
@@ -1116,7 +1912,10 @@ watch(
   display: flex;
   align-items: center;
   gap: 4px;
+  /* 基类 padding 已归零，加载气泡自持外观 */
   padding: 12px 16px;
+  background: #f5f9fb;
+  border-radius: 18px 18px 18px 4px;
 }
 
 .dot-pulse {
@@ -1140,8 +1939,282 @@ watch(
 }
 
 /* Chat input bar */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Chat Header（会话标题栏）
+   ═══════════════════════════════════════════════════════════════════════════ */
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 24px;
+  border-bottom: 1px solid rgba(8, 145, 178, 0.08);
+  background: #ffffff;
+  flex-shrink: 0;
+}
+
+.chat-header-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a2332;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.chat-header-btn-wrap {
+  position: relative;
+  display: flex;
+}
+
+.chat-header-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.chat-header-btn:hover,
+.chat-header-btn--active {
+  background: rgba(8, 145, 178, 0.1);
+  color: #0891b2;
+}
+
+/* 历史提问下拉 */
+.history-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 320px;
+  max-height: 360px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+  border: 1px solid rgba(8, 145, 178, 0.14);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.history-menu-title {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7f95;
+  border-bottom: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+
+.history-menu-list {
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.history-menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease;
+}
+
+.history-menu-item:hover {
+  background: rgba(8, 145, 178, 0.06);
+}
+
+.history-menu-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #374151;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.history-menu-time {
+  font-size: 11px;
+  color: #9ca3af;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.history-menu-empty {
+  margin: 0;
+  padding: 16px;
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+/* 对话内搜索条 */
+.chat-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 24px;
+  border-bottom: 1px solid rgba(8, 145, 178, 0.08);
+  background: #fbfdfe;
+  flex-shrink: 0;
+  color: #9ca3af;
+}
+
+.chat-search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 13px;
+  font-family: inherit;
+  color: #1a2332;
+  min-width: 0;
+}
+
+.chat-search-input::placeholder {
+  color: #9ca3af;
+}
+
+.chat-search-count {
+  font-size: 11px;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.chat-search-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.chat-search-btn:hover:not(:disabled) {
+  background: rgba(8, 145, 178, 0.1);
+  color: #0891b2;
+}
+
+.chat-search-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Chat Message Actions（AI 回复操作栏）
+   ═══════════════════════════════════════════════════════════════════════════ */
+.chat-msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.chat-msg-action-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.chat-msg-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.chat-msg-action-btn:hover:not(:disabled) {
+  background: rgba(8, 145, 178, 0.1);
+  color: #0e7490;
+}
+
+.chat-msg-action-btn--active {
+  color: #0891b2;
+}
+
+.chat-msg-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.chat-msg-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  font-size: 11px;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.chat-msg-meta-item--strong {
+  color: #6b7280;
+}
+
+/* Toast */
+.chat-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.85);
+  color: #ffffff;
+  font-size: 12px;
+  z-index: 150;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 .chat-input-bar {
-  padding: 0 32px 24px;
+  /* 与对话区同宽居中（max-width 与 margin auto 必须同写） */
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 0 24px;
 }
 
 .chat-input-card {
@@ -1187,7 +2260,7 @@ watch(
   }
 
   .chat-input-bar {
-    padding: 0 20px 16px;
+    padding: 0 0 16px;
   }
 }
 

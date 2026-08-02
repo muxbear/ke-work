@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 // 渲染层 window.api 类型（preload 的全局声明；node tsconfig 下需此处显式合并）
 import type { KeWorkWindowApi } from '../../../preload/index.d'
+import { useWorkspaceStore } from './workspace'
 
 declare global {
   interface Window {
@@ -14,6 +15,12 @@ export interface Message {
   role: 'user' | 'assistant' | 'tool'
   content: string
   reasoning?: string
+  /** 消息创建时刻（渲染层本地记录；历史重开无该字段） */
+  createdAt?: number
+  /** 流式生成耗时 ms（assistant 完成时写入） */
+  durationMs?: number
+  /** 生成所用模型（发送时快照当前选择） */
+  model?: string
 }
 
 export interface Conversation {
@@ -21,6 +28,8 @@ export interface Conversation {
   title: string
   createAt: number
   updateAt: number
+  /** 会话绑定的工作空间（创建时确定；主进程权威，渲染层仅展示） */
+  workspace?: { id: string; name: string; dir?: string } | null
 }
 
 /**
@@ -79,7 +88,9 @@ export const useAgentStore = defineStore('agent', () => {
       id: getId(),
       title: '新对话',
       createAt: now,
-      updateAt: now
+      updateAt: now,
+      // 绑定当前选择的工作空间（首次发送时主进程据此绑定会话；已绑定会话不受后续切换影响）
+      workspace: useWorkspaceStore().currentWorkspace
     }
     conversations.value.unshift(conv)
     currentConversationId.value = conv.id
@@ -134,42 +145,26 @@ export const useAgentStore = defineStore('agent', () => {
     }
   }
 
+  /** 创建 assistant 占位消息（流式开始前插入，事件按 id 定位填充） */
+  function createAssistantPlaceholder(model?: string): Message {
+    return { id: getId(), role: 'assistant', content: '', createdAt: Date.now(), model }
+  }
+
   /**
-   * 发送消息
-   * @param content 消息内容
+   * 共用流式管道：监听流事件填充 assistantMsg（sendMessage/regenerate 都走这里）
+   * @param mode append=正常发送（主进程追加 user 消息）；regenerate=重新生成（主进程截断旧回复，不新增 user 消息）
    */
-  async function sendMessage(content: string): Promise<void> {
-    const conv = await ensureConversation()
+  async function runStream(
+    conv: Conversation,
+    assistantMsg: Message,
+    content: string,
+    opts: { mode: 'append' | 'regenerate' }
+  ): Promise<void> {
+    const startedAt = Date.now()
 
-    const userMsg: Message = {
-      id: getId(),
-      role: 'user',
-      content: content
-    }
-
-    selectedMessages.value.push(userMsg)
-
-    // 根据用户消息生成会话标题（本地；列表重新加载时由主进程从 checkpoint 派生）
-    if (selectedMessages.value.length === 1) {
-      conv.title = content.slice(0, 30) + (content.length > 30 ? '...' : '')
-    }
-
-    // 创建一条 AI 消息进行占位
-    const assistantMsg: Message = {
-      id: getId(),
-      role: 'assistant',
-      content: ''
-    }
-
-    selectedMessages.value.push(assistantMsg)
-    conv.updateAt = Date.now()
-
-    isStreaming.value = true
-    isThinking.value = true
-
+    // 按 id 定位（regenerate 截断后 index 语义会漂移；消息被移除时返回 undefined 则回调 no-op）
     const getAssistantMsg = (): Message | undefined => {
-      const last = selectedMessages.value[selectedMessages.value.length - 1]
-      return last && last.role === 'assistant' ? last : undefined
+      return selectedMessages.value.find((m) => m.id === assistantMsg.id)
     }
 
     // 深度思考（reasoning）流
@@ -209,8 +204,14 @@ export const useAgentStore = defineStore('agent', () => {
     ])
 
     try {
-      // 主进程从 checkpoint 读取历史 + 追加本轮消息（会话数据全量由 LangGraph 管理）
-      const result = await window.api.sendAgentMessage(conv.id, content)
+      // 主进程从 checkpoint 读取历史 + 追加/截断（会话数据全量由 LangGraph 管理）
+      // workspaceId：当前选择的工作空间；主进程对已绑定会话忽略该参数（绑定优先）
+      const result = await window.api.sendAgentMessage(
+        conv.id,
+        content,
+        useWorkspaceStore().currentId ?? undefined,
+        { regenerate: opts.mode === 'regenerate' }
+      )
       if (!result.success) {
         const msg = getAssistantMsg()
         if (msg) {
@@ -232,7 +233,69 @@ export const useAgentStore = defineStore('agent', () => {
       isThinking.value = false
       isStreaming.value = false
       conv.updateAt = Date.now()
+      const msg = getAssistantMsg()
+      if (msg) {
+        msg.durationMs = Date.now() - startedAt
+      }
     }
+  }
+
+  /**
+   * 发送消息
+   * @param content 消息内容
+   * @param opts.model 生成所用模型（UI 展示快照）
+   */
+  async function sendMessage(content: string, opts?: { model?: string }): Promise<void> {
+    const conv = await ensureConversation()
+
+    const userMsg: Message = {
+      id: getId(),
+      role: 'user',
+      content: content,
+      createdAt: Date.now()
+    }
+
+    selectedMessages.value.push(userMsg)
+
+    // 根据用户消息生成会话标题（本地；列表重新加载时由主进程从 checkpoint 派生）
+    if (selectedMessages.value.length === 1) {
+      conv.title = content.slice(0, 30) + (content.length > 30 ? '...' : '')
+    }
+
+    // 创建一条 AI 消息进行占位
+    const assistantMsg = createAssistantPlaceholder(opts?.model)
+    selectedMessages.value.push(assistantMsg)
+    conv.updateAt = Date.now()
+
+    isStreaming.value = true
+    isThinking.value = true
+
+    await runStream(conv, assistantMsg, content, { mode: 'append' })
+  }
+
+  /**
+   * 重新生成：重发最后一条用户提问，生成新的 AI 回复（旧回复从 UI 与 checkpoint 中替换）
+   * @param opts.model 生成所用模型
+   */
+  async function regenerate(opts?: { model?: string }): Promise<void> {
+    if (isStreaming.value) return
+    const conv = currentConversation.value
+    if (!conv) return
+
+    const lastUserIdx = selectedMessages.value.findLastIndex((m) => m.role === 'user')
+    if (lastUserIdx === -1) return
+    const lastUser = selectedMessages.value[lastUserIdx]
+
+    // UI 立即表现"替换"：截断到最后一条用户消息，移除旧 AI 回复
+    selectedMessages.value = selectedMessages.value.slice(0, lastUserIdx + 1)
+    const assistantMsg = createAssistantPlaceholder(opts?.model)
+    selectedMessages.value.push(assistantMsg)
+    conv.updateAt = Date.now()
+
+    isStreaming.value = true
+    isThinking.value = true
+
+    await runStream(conv, assistantMsg, lastUser.content, { mode: 'regenerate' })
   }
 
   function cancelMessage(): void {
@@ -253,6 +316,7 @@ export const useAgentStore = defineStore('agent', () => {
     sidebarVisible,
     loaded,
     sendMessage,
+    regenerate,
     cancelMessage,
     stopAllTasks,
     isStreaming,

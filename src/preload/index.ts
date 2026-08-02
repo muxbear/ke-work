@@ -6,9 +6,11 @@ const api = {
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
   sendAgentMessage(
     conversationId: string,
-    content: string
+    content: string,
+    workspaceId?: string,
+    opts?: { regenerate?: boolean }
   ): Promise<{ success: boolean; error?: string }> {
-    return ipcRenderer.invoke('agent:send', conversationId, content) as Promise<{
+    return ipcRenderer.invoke('agent:send', conversationId, content, workspaceId, opts) as Promise<{
       success: boolean
       error?: string
     }>
@@ -73,6 +75,28 @@ const api = {
   },
   checkSession() {
     return ipcRenderer.invoke('session:check')
+  },
+  // ── 工作空间 API ──
+  listWorkspaces() {
+    return ipcRenderer.invoke('workspace:list')
+  },
+  createWorkspace(name: string) {
+    return ipcRenderer.invoke('workspace:create', name)
+  },
+  selectWorkspaceDir() {
+    return ipcRenderer.invoke('workspace:select-dir')
+  },
+  useTimestampWorkspace() {
+    return ipcRenderer.invoke('workspace:timestamp')
+  },
+  openWorkspace(id: string) {
+    return ipcRenderer.invoke('workspace:open', id)
+  },
+  listWorkspaceFiles(workspaceId: string, relPath?: string) {
+    return ipcRenderer.invoke('workspace:list-files', workspaceId, relPath)
+  },
+  readWorkspaceFile(workspaceId: string, relPath: string) {
+    return ipcRenderer.invoke('workspace:read-file', workspaceId, relPath)
   }
 }
 

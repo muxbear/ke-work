@@ -1,8 +1,9 @@
-import { app, shell, BrowserWindow, ipcMain, safeStorage } from 'electron'
+import { app, shell, BrowserWindow, dialog, ipcMain, safeStorage } from 'electron'
 import { join } from 'path'
+import { homedir } from 'os'
 import { randomBytes, randomUUID } from 'crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import { invokeSendMessage, toLangChainMessages } from './agent/service'
+import { invokeSendMessage, toLangChainMessages, buildRegenerateInput } from './agent/service'
 import { HumanMessage } from '@langchain/core/messages'
 import { detectOS } from './platform'
 import { getDataDirectory, initDataDirectory } from './data-dir'
@@ -16,6 +17,8 @@ import { AgentManager } from './agent/AgentManager'
 import { ConversationStore } from './agent/ConversationStore'
 import { registerConversationHandlers } from './ipc/conversation-handlers'
 import { registerModeHandlers } from './ipc/mode-handlers'
+import { WorkspaceService } from './workspace/WorkspaceService'
+import { registerWorkspaceHandlers } from './ipc/workspace-handlers'
 
 import icon from '../../resources/icon.png?asset'
 
@@ -125,6 +128,27 @@ app.whenReady().then(() => {
   const conversationStore = new ConversationStore(() => agentManager.getCheckpointer())
   registerConversationHandlers(ipcMain, { conversationStore, session })
 
+  // ── 工作空间服务（机器级；目录创建/校验集中在主进程）──
+  // 工作空间目录基址为用户家目录 KeWork/（与 ~/.ke-work 应用数据目录不同）
+  const workspaceService = new WorkspaceService(
+    dataSourceFactory.createWorkspaceRepository(),
+    join(homedir(), 'KeWork'),
+    {
+      selectDir: async () => {
+        const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+        const result = win
+          ? await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
+          : await dialog.showOpenDialog({ properties: ['openDirectory'] })
+        return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
+      },
+      openPath: async (p) => {
+        const err = await shell.openPath(p)
+        if (err) throw new Error(err)
+      }
+    }
+  )
+  registerWorkspaceHandlers(ipcMain, { workspaceService })
+
   // ── 注册工作模式 IPC ──
   registerModeHandlers(ipcMain, {
     modeStore: workModeStore,
@@ -149,54 +173,83 @@ app.whenReady().then(() => {
   })
 
   // Agent message handler
-  ipcMain.handle('agent:send', async (event, conversationId?: unknown, content?: unknown) => {
-    console.log('[main] agent:send handler, conversationId:', conversationId)
-    const win = BrowserWindow.fromWebContents(event.sender)
-    if (!win) {
-      console.error('[main] No window found for event.sender')
-      throw new Error('No window found')
-    }
-    if (
-      typeof conversationId !== 'string' ||
-      !conversationId ||
-      typeof content !== 'string' ||
-      !content
-    ) {
-      return { success: false, error: '参数错误' }
-    }
+  ipcMain.handle(
+    'agent:send',
+    async (
+      event,
+      conversationId?: unknown,
+      content?: unknown,
+      workspaceId?: unknown,
+      opts?: unknown
+    ) => {
+      console.log('[main] agent:send handler, conversationId:', conversationId)
+      const win = BrowserWindow.fromWebContents(event.sender)
+      if (!win) {
+        console.error('[main] No window found for event.sender')
+        throw new Error('No window found')
+      }
+      if (
+        typeof conversationId !== 'string' ||
+        !conversationId ||
+        typeof content !== 'string' ||
+        !content
+      ) {
+        return { success: false, error: '参数错误' }
+      }
+      const regenerate =
+        typeof opts === 'object' &&
+        opts !== null &&
+        (opts as { regenerate?: unknown }).regenerate === true
 
-    const controller = new AbortController()
-    abortControllers.set(win.id, controller)
+      const controller = new AbortController()
+      abortControllers.set(win.id, controller)
 
-    try {
-      // 会话历史（checkpoint 内）+ 本轮新消息；历史带 id，图内 reducer 按 id 去重
-      const userId = session.requireUserId()
-      const [agent, history] = await Promise.all([
-        agentManager.ready(),
-        conversationStore.getMessages(userId, conversationId)
-      ])
-      const messages = toLangChainMessages(history)
-      messages.push(new HumanMessage({ id: `msg-${randomUUID()}`, content }))
+      try {
+        // 会话历史（checkpoint 内）+ 本轮新消息；历史带 id，图内 reducer 按 id 去重
+        const userId = session.requireUserId()
+        const [agent, history] = await Promise.all([
+          agentManager.ready(),
+          conversationStore.getMessages(userId, conversationId)
+        ])
+        const messages = toLangChainMessages(history)
+        if (regenerate) {
+          // 重新生成：删除最后一条 user 之后的消息（RemoveMessage 命令），图继续生成新回复
+          messages.push(...buildRegenerateInput(history))
+        } else {
+          messages.push(new HumanMessage({ id: `msg-${randomUUID()}`, content }))
+        }
 
-      await invokeSendMessage(
-        messages,
-        win,
-        agent,
-        {
-          thread_id: conversationStore.buildThreadId(userId, conversationId),
-          user_id: userId
-        },
-        controller.signal
-      )
-      console.log('[main] invokeSendMessage completed, returning success')
-      return { success: true }
-    } catch (error) {
-      console.error('[main] Error handling message:', error)
-      return { success: false, error: (error as Error).message || 'Unknown error' }
-    } finally {
-      abortControllers.delete(win.id)
+        // 工作空间解析（主进程权威）：会话已绑定 > 渲染层当前选择 > null（backend 兜底默认目录）
+        // 已绑定会话忽略渲染层传入 id（绑定优先），防伪造与误切
+        const bound = await conversationStore.getWorkspace(userId, conversationId)
+        const ws =
+          bound ??
+          (typeof workspaceId === 'string' && workspaceId
+            ? workspaceService.resolveWorkspace(workspaceId)
+            : null)
+
+        await invokeSendMessage(
+          messages,
+          win,
+          agent,
+          {
+            thread_id: conversationStore.buildThreadId(userId, conversationId),
+            user_id: userId,
+            workspace_dir: ws?.dir,
+            workspace: ws
+          },
+          controller.signal
+        )
+        console.log('[main] invokeSendMessage completed, returning success')
+        return { success: true }
+      } catch (error) {
+        console.error('[main] Error handling message:', error)
+        return { success: false, error: (error as Error).message || 'Unknown error' }
+      } finally {
+        abortControllers.delete(win.id)
+      }
     }
-  })
+  )
 
   // Agent cancel handler
   ipcMain.on('agent:cancel', (event) => {

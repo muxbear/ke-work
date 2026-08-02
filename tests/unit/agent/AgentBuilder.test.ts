@@ -10,7 +10,7 @@ vi.mock('deepagents', () => ({
     createDeepAgentMock(config)
     return { id: 'mock-agent' }
   },
-  FilesystemBackend: class {
+  LocalShellBackend: class {
     constructor(public opts: unknown) {}
   },
   StoreBackend: class {
@@ -57,15 +57,34 @@ describe('AgentBuilder', () => {
     createDeepAgentMock.mockClear()
   })
 
-  it('AG-01: local 默认配置（FilesystemBackend + SqliteSaver + SqliteStore）', async () => {
+  it('AG-01: local 默认配置（backend 工厂 + SqliteSaver + SqliteStore）', async () => {
     await createAgentBuilder('local', workDir, checkpointPath, storePath)
       .setModel('deepseek:deepseek-v4-pro')
       .build()
     const config = createDeepAgentMock.mock.calls[0][0] as Record<string, never>
-    expect((config.backend as { opts: { rootDir: string } }).opts.rootDir).toBe(workDir)
+    // backend 为工厂函数（非实例）：按运行期 configurable.workspace_dir 解析根目录
+    expect(typeof config.backend).toBe('function')
+    const instance = (config.backend as (r: { configurable: { workspace_dir: string } }) => {
+      opts: { rootDir: string; virtualMode: boolean; inheritEnv: boolean }
+    })({ configurable: { workspace_dir: workDir } })
+    expect(instance.opts.rootDir).toBe(workDir)
+    expect(instance.opts.virtualMode).toBe(true)
+    expect(instance.opts.inheritEnv).toBe(true)
     expect((config.checkpointer as { kind: string }).kind).toBe('SqliteSaver')
     // 长期记忆：local 使用 SQLite 持久化版 SqliteStore（参考 PostgresStore 移植）
     expect(config.store).toBeInstanceOf(SqliteStore)
+  })
+
+  it('AG-07: 无 workspace_dir 时 backend 兜底默认工作目录', async () => {
+    await createAgentBuilder('local', workDir, checkpointPath, storePath).setModel('m').build()
+    const config = createDeepAgentMock.mock.calls[0][0] as Record<string, never>
+    const factory = config.backend as (r: unknown) => { opts: { rootDir: string } }
+    // runtime 无 workspace_dir（旧会话/未选择工作空间）
+    const viaDefault = factory({})
+    expect(viaDefault.opts.rootDir).toBe(workDir)
+    // runtime 仅 config.configurable 提供 workspace_dir 也生效
+    const viaConfig = factory({ config: { configurable: { workspace_dir: '/cfg/dir' } } })
+    expect(viaConfig.opts.rootDir).toBe('/cfg/dir')
   })
 
   it('AG-06: local checkpointer 路径为数据库文件而非工作目录（与业务库共用 ke-work.db）', async () => {

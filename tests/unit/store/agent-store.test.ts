@@ -48,11 +48,18 @@ describe('useAgentStore（会话数据基于 LangGraph checkpoint）', () => {
     setActivePinia(createPinia())
     mock = createMockWindowApi()
     ;(globalThis as Record<string, unknown>).window = { api: mock.api }
+    // workspace store 读取 localStorage 持久化当前空间（node 测试环境无 localStorage）
+    ;(globalThis as Record<string, unknown>).localStorage = {
+      getItem: vi.fn(() => null),
+      setItem: vi.fn(),
+      removeItem: vi.fn()
+    }
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
     delete (globalThis as Record<string, unknown>).window
+    delete (globalThis as Record<string, unknown>).localStorage
   })
 
   it('loadConversations 从 IPC 加载会话列表', async () => {
@@ -74,7 +81,7 @@ describe('useAgentStore（会话数据基于 LangGraph checkpoint）', () => {
     expect(store.sortedConversations).toHaveLength(1)
   })
 
-  it('sendMessage 完整流程：流式输出、标题本地生成、主进程仅收 conversationId + content', async () => {
+  it('sendMessage 完整流程：流式输出、标题本地生成、主进程收 conversationId + content + workspaceId', async () => {
     const store = useAgentStore()
     await store.createConversation()
     const convId = store.currentConversationId!
@@ -100,8 +107,10 @@ describe('useAgentStore（会话数据基于 LangGraph checkpoint）', () => {
     expect(store.currentMessages[0].content).toBe('你好世界')
     expect(store.currentMessages[1].content).toBe('你好，世界！')
     expect(store.currentMessages[1].reasoning).toBe('思考中...')
-    // 主进程契约：conversationId + content（历史由主进程从 checkpoint 读取）
-    expect(mock.api.sendAgentMessage).toHaveBeenCalledWith(convId, '你好世界')
+    // 主进程契约：conversationId + content + workspaceId（未选择空间时为 undefined）+ 发送模式
+    expect(mock.api.sendAgentMessage).toHaveBeenCalledWith(convId, '你好世界', undefined, {
+      regenerate: false
+    })
     // 标题本地生成（第一条消息）
     expect(store.currentConversation?.title).toBe('你好世界')
     // 不再经 IPC 落库
@@ -146,6 +155,60 @@ describe('useAgentStore（会话数据基于 LangGraph checkpoint）', () => {
     await store.selectConversation(convId)
     expect(store.currentMessages).toHaveLength(1)
     expect(store.currentMessages[0].content).toBe('存量消息')
+  })
+
+  it('regenerate 截断到最后一条 user 并重发（IPC 第 4 参 regenerate: true，不重复 user 消息）', async () => {
+    const store = useAgentStore()
+    await store.createConversation()
+    const convId = store.currentConversationId!
+
+    // 第一轮
+    const p1 = store.sendMessage('第一个问题')
+    await vi.waitFor(() => expect(mock.api.onAgentDone).toHaveBeenCalled())
+    ;(firstCallArg(mock.api.onAgentDone) as () => void)()
+    await p1
+
+    // 第二轮
+    mock.api.onAgentDone.mockClear()
+    const p2 = store.sendMessage('第二个问题')
+    await vi.waitFor(() => expect(mock.api.onAgentDone).toHaveBeenCalled())
+    ;(firstCallArg(mock.api.onAgentDone) as () => void)()
+    await p2
+
+    expect(store.currentMessages.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'assistant'])
+
+    // regenerate：截断最后一条 AI 回复 + 新占位；user 消息数不变
+    mock.api.sendAgentMessage.mockClear()
+    mock.api.onAgentDone.mockClear()
+    const regen = store.regenerate()
+    expect(store.currentMessages.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'assistant'])
+    expect(store.currentMessages.filter((m) => m.role === 'user')).toHaveLength(2)
+
+    await vi.waitFor(() => expect(mock.api.onAgentDone).toHaveBeenCalled())
+    ;(firstCallArg(mock.api.onAgentDone) as () => void)()
+    await regen
+
+    expect(mock.api.sendAgentMessage).toHaveBeenCalledWith(convId, '第二个问题', undefined, {
+      regenerate: true
+    })
+    const last = store.currentMessages[store.currentMessages.length - 1]
+    expect(last.role).toBe('assistant')
+    expect(last.durationMs).toBeGreaterThanOrEqual(0)
+  })
+
+  it('regenerate 在流式进行中拒绝（不调用 IPC）', async () => {
+    const store = useAgentStore()
+    await store.createConversation()
+    const p = store.sendMessage('问题')
+    await vi.waitFor(() => expect(mock.api.onAgentDone).toHaveBeenCalled())
+    const doneHandler = firstCallArg(mock.api.onAgentDone) as () => void
+
+    mock.api.sendAgentMessage.mockClear()
+    await store.regenerate()
+    expect(mock.api.sendAgentMessage).not.toHaveBeenCalled()
+
+    doneHandler()
+    await p
   })
 
   it('stopAllTasks 重置流式状态（登出/切换前停止所有任务）', () => {

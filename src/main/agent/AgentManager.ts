@@ -12,7 +12,7 @@ export class AgentManager {
   private skills: string[] = []
 
   constructor(
-    private readonly workspaceDir: string,
+    private readonly defaultWorkspaceDir: string,
     private readonly checkpointDbPath: string,
     private readonly storeDbPath: string
   ) {}
@@ -24,7 +24,12 @@ export class AgentManager {
   }
 
   private async buildAgent(mode: WorkMode): Promise<void> {
-    this.builder = new AgentBuilder(mode, this.workspaceDir, this.checkpointDbPath, this.storeDbPath)
+    this.builder = new AgentBuilder(
+      mode,
+      this.defaultWorkspaceDir,
+      this.checkpointDbPath,
+      this.storeDbPath
+    )
       .withModeDefaults()
       .setModel(this.model)
     if (this.skills.length > 0) this.builder.setSkills(this.skills)

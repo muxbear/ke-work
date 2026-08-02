@@ -9,7 +9,7 @@ vi.mock('deepagents', () => ({
     createDeepAgentMock(config)
     return { id: 'mock-agent', dispose: vi.fn().mockResolvedValue(undefined) }
   },
-  FilesystemBackend: class {
+  LocalShellBackend: class {
     constructor(public opts: unknown) {}
   },
   StoreBackend: class {

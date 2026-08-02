@@ -59,6 +59,20 @@ CREATE TABLE IF NOT EXISTS sms_codes (
 DROP TABLE IF EXISTS messages;
 DROP TABLE IF EXISTS conversations;
 `
+  },
+  {
+    // 工作空间：为任务指定工作目录（path UNIQUE 保证外部/时间戳目录重复选择幂等）
+    version: 4,
+    sql: `
+CREATE TABLE IF NOT EXISTS workspaces (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  path       TEXT NOT NULL UNIQUE,
+  source     TEXT NOT NULL DEFAULT 'created',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_workspaces_created ON workspaces(created_at DESC);
+`
   }
 ]
 

@@ -7,12 +7,20 @@ function makeTuple(
   threadId: string,
   messages: Array<{ id: string; role: string; content: string }>,
   updatedAt: Date,
-  createdAt: Date = updatedAt
+  createdAt: Date = updatedAt,
+  workspace?: { id: string; name: string; dir?: string } | null
 ): CheckpointTuple {
   return {
     config: { configurable: { thread_id: threadId } },
     checkpoint: { channel_values: { messages }, checkpoint_id: '', type: '' },
-    metadata: { source: 'loop', step: 1, parents: {}, created_at: createdAt, updated_at: updatedAt }
+    metadata: {
+      source: 'loop',
+      step: 1,
+      parents: {},
+      created_at: createdAt,
+      updated_at: updatedAt,
+      ...(workspace !== undefined ? { workspace } : {})
+    }
   } as unknown as CheckpointTuple
 }
 
@@ -97,6 +105,37 @@ describe('ConversationStore（基于 LangGraph checkpointer 的会话服务）',
   it('getMessages 会话不存在返回空数组', async () => {
     const store = new ConversationStore(() => makeCheckpointer([]) as never)
     expect(await store.getMessages('u1', 'nonexistent')).toEqual([])
+  })
+
+  it('listConversations 透出工作空间绑定（无绑定为 null）', async () => {
+    const tuples = [
+      makeTuple('u:u1:c1', [{ id: 'm1', role: 'human', content: '绑定空间' }], new Date(200), new Date(200), {
+        id: 'ws-1',
+        name: '项目A',
+        dir: '/tmp/项目A'
+      }),
+      makeTuple('u:u1:c2', [{ id: 'm1', role: 'human', content: '无绑定' }], new Date(300))
+    ]
+    const store = new ConversationStore(() => makeCheckpointer(tuples) as never)
+
+    const list = await store.listConversations('u1')
+    const c1 = list.find((c) => c.id === 'c1')!
+    const c2 = list.find((c) => c.id === 'c2')!
+    expect(c1.workspace).toEqual({ id: 'ws-1', name: '项目A', dir: '/tmp/项目A' })
+    expect(c2.workspace).toBeNull()
+  })
+
+  it('getWorkspace 返回会话绑定（旧会话无绑定返回 null）', async () => {
+    const bound = makeTuple('u:u1:c1', [{ id: 'm1', role: 'human', content: 'hi' }], new Date(100), new Date(100), {
+      id: 'ws-1',
+      name: '项目A'
+    })
+    const unbound = makeTuple('u:u1:c2', [{ id: 'm1', role: 'human', content: 'hi' }], new Date(100))
+    const store = new ConversationStore(() => makeCheckpointer([bound, unbound]) as never)
+
+    expect(await store.getWorkspace('u1', 'c1')).toEqual({ id: 'ws-1', name: '项目A', dir: undefined })
+    expect(await store.getWorkspace('u1', 'c2')).toBeNull()
+    expect(await store.getWorkspace('u1', 'nonexistent')).toBeNull()
   })
 
   it('deleteConversation 用合成 thread_id 调 deleteThread', async () => {
