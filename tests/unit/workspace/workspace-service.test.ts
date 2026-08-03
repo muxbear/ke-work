@@ -81,39 +81,62 @@ describe('WorkspaceService', () => {
     )
   })
 
-  describe('createWorkspace', () => {
-    it('创建目录并入库（目录落在基目录下）', () => {
-      const ws = service.createWorkspace('测试项目')
-      expect(ws.source).toBe('created')
-      expect(ws.path).toBe(join(baseDir, '测试项目'))
-      expect(existsSync(ws.path)).toBe(true)
-      expect(service.list()).toHaveLength(1)
+  describe('list（用户隔离 + 默认空间）', () => {
+    it('恒含默认空间（记录与目录自动创建）', () => {
+      const rows = service.list('u1')
+      expect(rows.map((r) => r.name)).toContain('默认工作空间')
+      expect(existsSync(join(baseDir, 'DefaultWorkspace'))).toBe(true)
     })
 
-    it('同名已存在拒绝', () => {
-      service.createWorkspace('重复')
-      expect(() => service.createWorkspace('重复')).toThrow(/已存在/)
-    })
-
-    it('非法名透传 sanitize 错误', () => {
-      expect(() => service.createWorkspace('a/b')).toThrow()
-      expect(service.list()).toHaveLength(0)
+    it('只返回当前用户的工作空间', () => {
+      service.createWorkspace('u1项目', 'u1')
+      service.createWorkspace('u2项目', 'u2')
+      const names = service.list('u1').map((r) => r.name)
+      expect(names).toHaveLength(2) // u1项目 + 默认空间
+      expect(names).toContain('u1项目')
+      expect(names).not.toContain('u2项目')
     })
   })
 
-  describe('ensureTimestampWorkspace', () => {
-    it('命名 YYYYMMDD-HHmmss 且创建目录', () => {
-      const ws = service.ensureTimestampWorkspace()
-      expect(ws.source).toBe('timestamp')
-      expect(ws.name).toMatch(/^\d{8}-\d{6}$/)
+  describe('ensureDefaultWorkspace', () => {
+    it('创建默认目录并入库（source: default、name: 默认工作空间、user_id 为 null）', () => {
+      const ws = service.ensureDefaultWorkspace()
+      expect(ws.source).toBe('default')
+      expect(ws.name).toBe('默认工作空间')
+      expect(ws.userId).toBeNull()
+      expect(ws.path).toBe(join(baseDir, 'DefaultWorkspace'))
       expect(existsSync(ws.path)).toBe(true)
     })
 
     it('重复调用幂等（返回同一条记录，不重复建目录）', () => {
-      const a = service.ensureTimestampWorkspace()
-      const b = service.ensureTimestampWorkspace()
+      const a = service.ensureDefaultWorkspace()
+      const b = service.ensureDefaultWorkspace()
       expect(a.id).toBe(b.id)
-      expect(service.list()).toHaveLength(1)
+      expect(service.list('u1')).toHaveLength(1)
+    })
+  })
+
+  describe('createWorkspace', () => {
+    it('创建目录并入库（目录落在基目录下，归属当前用户）', () => {
+      const ws = service.createWorkspace('测试项目', 'u1')
+      expect(ws.source).toBe('created')
+      expect(ws.userId).toBe('u1')
+      expect(ws.path).toBe(join(baseDir, '测试项目'))
+      expect(existsSync(ws.path)).toBe(true)
+      expect(service.list('u1')).toHaveLength(2) // 测试项目 + 默认空间
+    })
+
+    it('同名已存在拒绝（含 DefaultWorkspace 目录名）', () => {
+      service.createWorkspace('重复', 'u1')
+      expect(() => service.createWorkspace('重复', 'u1')).toThrow(/已存在/)
+      // 默认空间目录已存在，用户无法创建同名空间
+      service.ensureDefaultWorkspace()
+      expect(() => service.createWorkspace('DefaultWorkspace', 'u1')).toThrow(/已存在/)
+    })
+
+    it('非法名透传 sanitize 错误', () => {
+      expect(() => service.createWorkspace('a/b', 'u1')).toThrow()
+      expect(service.list('u1')).toHaveLength(1) // 仅默认空间
     })
   })
 
@@ -122,8 +145,8 @@ describe('WorkspaceService', () => {
       const svc = new WorkspaceService(repo, baseDir, {
         selectDir: vi.fn().mockResolvedValue(null)
       })
-      expect(await svc.selectExternalDir()).toBeNull()
-      expect(service.list()).toHaveLength(0)
+      expect(await svc.selectExternalDir('u1')).toBeNull()
+      expect(service.list('u1')).toHaveLength(1) // 仅默认空间
     })
 
     it('选中目录入库（source: external）且不重复', async () => {
@@ -132,131 +155,182 @@ describe('WorkspaceService', () => {
       const svc = new WorkspaceService(repo, baseDir, {
         selectDir: vi.fn().mockResolvedValue(external)
       })
-      const a = await svc.selectExternalDir()
-      const b = await svc.selectExternalDir()
+      const a = await svc.selectExternalDir('u1')
+      const b = await svc.selectExternalDir('u1')
       expect(a!.source).toBe('external')
       expect(a!.path).toBe(external)
       expect(b!.id).toBe(a!.id)
-      expect(service.list()).toHaveLength(1)
+      expect(service.list('u1')).toHaveLength(2) // 默认空间 + external
+    })
+
+    it('他人已登记目录拒绝', async () => {
+      const external = join(baseDir, '他人目录')
+      mkdirSync(external, { recursive: true })
+      const svc = new WorkspaceService(repo, baseDir, {
+        selectDir: vi.fn().mockResolvedValue(external)
+      })
+      await svc.selectExternalDir('u1')
+      await expect(svc.selectExternalDir('u2')).rejects.toThrow(/已被其他用户/)
+    })
+
+    it('无主记录接管（NULL 旧记录归属当前用户）', async () => {
+      const external = join(baseDir, '无主目录')
+      mkdirSync(external, { recursive: true })
+      repo.create({ name: '无主目录', path: external, source: 'external', userId: null })
+      const svc = new WorkspaceService(repo, baseDir, {
+        selectDir: vi.fn().mockResolvedValue(external)
+      })
+      const ws = await svc.selectExternalDir('u1')
+      expect(ws!.userId).toBe('u1')
+    })
+  })
+
+  describe('deleteWorkspace', () => {
+    it('删除本人记录（磁盘目录保留）', () => {
+      const ws = service.createWorkspace('可删', 'u1')
+      service.deleteWorkspace(ws.id, 'u1')
+      expect(service.list('u1').map((r) => r.id)).not.toContain(ws.id)
+      expect(existsSync(ws.path)).toBe(true)
+    })
+
+    it('默认空间不可删除', () => {
+      const def = service.ensureDefaultWorkspace()
+      expect(() => service.deleteWorkspace(def.id, 'u1')).toThrow(/默认工作空间不可删除/)
+    })
+
+    it('他人空间（不可见）删除抛错', () => {
+      const ws = service.createWorkspace('他人', 'u2')
+      expect(() => service.deleteWorkspace(ws.id, 'u1')).toThrow(/不存在/)
     })
   })
 
   describe('resolveWorkspace', () => {
     it('目录存在返回运行参数', () => {
-      const ws = service.createWorkspace('解析')
-      const resolved = service.resolveWorkspace(ws.id)
+      const ws = service.createWorkspace('解析', 'u1')
+      const resolved = service.resolveWorkspace(ws.id, 'u1')
       expect(resolved).toEqual({ id: ws.id, name: '解析', dir: ws.path })
     })
 
+    it('默认空间可解析（目录存在）', () => {
+      const def = service.ensureDefaultWorkspace()
+      const resolved = service.resolveWorkspace(def.id, 'u1')
+      expect(resolved).toEqual({ id: def.id, name: '默认工作空间', dir: def.path })
+    })
+
     it('id 不存在返回 null', () => {
-      expect(service.resolveWorkspace('nope')).toBeNull()
+      expect(service.resolveWorkspace('nope', 'u1')).toBeNull()
+    })
+
+    it('他人空间（不可见）返回 null', () => {
+      const ws = service.createWorkspace('他人', 'u2')
+      expect(service.resolveWorkspace(ws.id, 'u1')).toBeNull()
     })
 
     it('目录被删除返回 null', () => {
-      const ws = service.createWorkspace('将被删')
+      const ws = service.createWorkspace('将被删', 'u1')
       // 模拟目录从原位置消失（rename 而非 rm，绕开中文路径删除的环境问题）
       renameSync(ws.path, join(baseDir, 'moved-away'))
-      expect(service.resolveWorkspace(ws.id)).toBeNull()
+      expect(service.resolveWorkspace(ws.id, 'u1')).toBeNull()
     })
   })
 
   describe('listFiles', () => {
     it('空目录返回空数组', () => {
-      const ws = service.createWorkspace('empty-dir')
-      expect(service.listFiles(ws.id)).toEqual([])
+      const ws = service.createWorkspace('empty-dir', 'u1')
+      expect(service.listFiles(ws.id, 'u1')).toEqual([])
     })
 
     it('目录优先 + 字母序排序', () => {
-      const ws = service.createWorkspace('sorted')
+      const ws = service.createWorkspace('sorted', 'u1')
       writeFileSync(join(ws.path, 'b.txt'), 'b')
       writeFileSync(join(ws.path, 'a.txt'), 'a')
       mkdirSync(join(ws.path, 'z-dir'))
       mkdirSync(join(ws.path, 'a-dir'))
-      const entries = service.listFiles(ws.id)
+      const entries = service.listFiles(ws.id, 'u1')
       expect(entries.map((e) => e.name)).toEqual(['a-dir', 'z-dir', 'a.txt', 'b.txt'])
       expect(entries.map((e) => e.type)).toEqual(['dir', 'dir', 'file', 'file'])
       expect(entries[0].relPath).toBe('a-dir')
     })
 
     it('隐藏名过滤（.git/node_modules/.DS_Store）', () => {
-      const ws = service.createWorkspace('hidden')
+      const ws = service.createWorkspace('hidden', 'u1')
       mkdirSync(join(ws.path, '.git'))
       mkdirSync(join(ws.path, 'node_modules'))
       writeFileSync(join(ws.path, '.DS_Store'), 'x')
       writeFileSync(join(ws.path, 'visible.txt'), 'x')
-      const entries = service.listFiles(ws.id)
+      const entries = service.listFiles(ws.id, 'u1')
       expect(entries.map((e) => e.name)).toEqual(['visible.txt'])
     })
 
     it('relPath 子目录遍历（返回嵌套相对路径）', () => {
-      const ws = service.createWorkspace('nested')
+      const ws = service.createWorkspace('nested', 'u1')
       mkdirSync(join(ws.path, 'src', 'lib'), { recursive: true })
       writeFileSync(join(ws.path, 'src', 'main.ts'), 'x')
-      const entries = service.listFiles(ws.id, 'src')
+      const entries = service.listFiles(ws.id, 'u1', 'src')
       expect(entries.map((e) => e.relPath)).toEqual(['src/lib', 'src/main.ts'])
     })
 
     it('工作空间 id 不存在抛错', () => {
-      expect(() => service.listFiles('nope')).toThrow(/不存在/)
+      expect(() => service.listFiles('nope', 'u1')).toThrow(/不存在/)
     })
 
     it('越界路径（../）与绝对路径拒绝', () => {
-      const ws = service.createWorkspace('secure')
-      expect(() => service.listFiles(ws.id, '../')).toThrow(/越界/)
-      expect(() => service.listFiles(ws.id, '../../etc')).toThrow(/越界/)
-      expect(() => service.listFiles(ws.id, join(tmpdir(), 'x'))).toThrow(/越界/)
+      const ws = service.createWorkspace('secure', 'u1')
+      expect(() => service.listFiles(ws.id, 'u1', '../')).toThrow(/越界/)
+      expect(() => service.listFiles(ws.id, 'u1', '../../etc')).toThrow(/越界/)
+      expect(() => service.listFiles(ws.id, 'u1', join(tmpdir(), 'x'))).toThrow(/越界/)
     })
 
     it('relPath 指向文件抛错', () => {
-      const ws = service.createWorkspace('file-target')
+      const ws = service.createWorkspace('file-target', 'u1')
       writeFileSync(join(ws.path, 'a.txt'), 'x')
-      expect(() => service.listFiles(ws.id, 'a.txt')).toThrow(/不是目录/)
+      expect(() => service.listFiles(ws.id, 'u1', 'a.txt')).toThrow(/不是目录/)
     })
 
     it('超过 200 条截断', () => {
-      const ws = service.createWorkspace('many')
+      const ws = service.createWorkspace('many', 'u1')
       for (let i = 0; i < 250; i++) {
         writeFileSync(join(ws.path, `f${String(i).padStart(3, '0')}.txt`), 'x')
       }
-      const entries = service.listFiles(ws.id)
+      const entries = service.listFiles(ws.id, 'u1')
       expect(entries.length).toBe(200)
     })
   })
 
   describe('readFile', () => {
     it('读取文本内容', () => {
-      const ws = service.createWorkspace('read-ok')
+      const ws = service.createWorkspace('read-ok', 'u1')
       writeFileSync(join(ws.path, 'hello.txt'), '你好，ke-work', 'utf-8')
-      const result = service.readFile(ws.id, 'hello.txt')
+      const result = service.readFile(ws.id, 'u1', 'hello.txt')
       expect(result.content).toBe('你好，ke-work')
       expect(result.truncated).toBe(false)
     })
 
     it('含 NUL 的二进制文件拒绝', () => {
-      const ws = service.createWorkspace('binary')
+      const ws = service.createWorkspace('binary', 'u1')
       writeFileSync(join(ws.path, 'img.bin'), Buffer.from([0x89, 0x50, 0x00, 0x0a, 0x01]))
-      expect(() => service.readFile(ws.id, 'img.bin')).toThrow(/二进制/)
+      expect(() => service.readFile(ws.id, 'u1', 'img.bin')).toThrow(/二进制/)
     })
 
     it('超过 200KB 截断并置 truncated', () => {
-      const ws = service.createWorkspace('large')
+      const ws = service.createWorkspace('large', 'u1')
       writeFileSync(join(ws.path, 'big.log'), 'a'.repeat(250 * 1024))
-      const result = service.readFile(ws.id, 'big.log')
+      const result = service.readFile(ws.id, 'u1', 'big.log')
       expect(result.truncated).toBe(true)
       expect(result.content.length).toBeLessThanOrEqual(200 * 1024)
     })
 
     it('越界路径拒绝', () => {
-      const ws = service.createWorkspace('read-secure')
-      expect(() => service.readFile(ws.id, '../secret.txt')).toThrow(/越界/)
-      expect(() => service.readFile(ws.id, join(tmpdir(), 'secret.txt'))).toThrow(/越界/)
+      const ws = service.createWorkspace('read-secure', 'u1')
+      expect(() => service.readFile(ws.id, 'u1', '../secret.txt')).toThrow(/越界/)
+      expect(() => service.readFile(ws.id, 'u1', join(tmpdir(), 'secret.txt'))).toThrow(/越界/)
     })
 
     it('文件不存在 / 指向目录抛错', () => {
-      const ws = service.createWorkspace('read-missing')
-      expect(() => service.readFile(ws.id, 'nope.txt')).toThrow(/ENOENT|不存在/)
+      const ws = service.createWorkspace('read-missing', 'u1')
+      expect(() => service.readFile(ws.id, 'u1', 'nope.txt')).toThrow(/ENOENT|不存在/)
       mkdirSync(join(ws.path, 'dir'))
-      expect(() => service.readFile(ws.id, 'dir')).toThrow(/不是文件/)
+      expect(() => service.readFile(ws.id, 'u1', 'dir')).toThrow(/不是文件/)
     })
   })
 
@@ -264,13 +338,18 @@ describe('WorkspaceService', () => {
     it('打开目录调用 openPath', async () => {
       const openPath = vi.fn().mockResolvedValue(undefined)
       const svc = new WorkspaceService(repo, baseDir, { openPath })
-      const ws = svc.createWorkspace('打开')
-      await svc.openWorkspace(ws.id)
+      const ws = svc.createWorkspace('打开', 'u1')
+      await svc.openWorkspace(ws.id, 'u1')
       expect(openPath).toHaveBeenCalledWith(ws.path)
     })
 
     it('id 不存在抛错', async () => {
-      await expect(service.openWorkspace('nope')).rejects.toThrow(/不存在/)
+      await expect(service.openWorkspace('nope', 'u1')).rejects.toThrow(/不存在/)
+    })
+
+    it('他人空间不可打开', async () => {
+      const ws = service.createWorkspace('他人', 'u2')
+      await expect(service.openWorkspace(ws.id, 'u1')).rejects.toThrow(/不存在/)
     })
   })
 })

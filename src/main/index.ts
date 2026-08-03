@@ -124,11 +124,14 @@ app.whenReady().then(() => {
   const agentManager = new AgentManager(dataDir.getDir('workspace'), appDbPath, appDbPath)
   agentManager.init(mode).catch((err) => console.error('[main] agent init failed:', err))
 
-  // ── 注册会话 IPC（基于 LangGraph checkpointer 的会话读写）──
-  const conversationStore = new ConversationStore(() => agentManager.getCheckpointer())
+  // ── 注册会话 IPC（基于 LangGraph checkpointer 的会话读写；自定义标题落本地业务表）──
+  const conversationStore = new ConversationStore(
+    () => agentManager.getCheckpointer(),
+    () => dataSourceFactory.getLocalDb()
+  )
   registerConversationHandlers(ipcMain, { conversationStore, session })
 
-  // ── 工作空间服务（机器级；目录创建/校验集中在主进程）──
+  // ── 工作空间服务（按登录用户隔离；目录创建/校验集中在主进程）──
   // 工作空间目录基址为用户家目录 KeWork/（与 ~/.ke-work 应用数据目录不同）
   const workspaceService = new WorkspaceService(
     dataSourceFactory.createWorkspaceRepository(),
@@ -147,7 +150,17 @@ app.whenReady().then(() => {
       }
     }
   )
-  registerWorkspaceHandlers(ipcMain, { workspaceService })
+  registerWorkspaceHandlers(ipcMain, { workspaceService, session })
+
+  // 打开默认工作目录（~/.ke-work/workspace；未绑定工作空间的会话使用）
+  ipcMain.handle('workspace:open-default', async () => {
+    try {
+      const err = await shell.openPath(dataDir.getDir('workspace'))
+      return err ? { success: false, error: err } : { success: true, data: null }
+    } catch (error) {
+      return { success: false, error: (error as Error).message }
+    }
+  })
 
   // ── 注册工作模式 IPC ──
   registerModeHandlers(ipcMain, {
@@ -225,7 +238,7 @@ app.whenReady().then(() => {
         const ws =
           bound ??
           (typeof workspaceId === 'string' && workspaceId
-            ? workspaceService.resolveWorkspace(workspaceId)
+            ? workspaceService.resolveWorkspace(workspaceId, userId)
             : null)
 
         await invokeSendMessage(

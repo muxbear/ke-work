@@ -22,10 +22,18 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     () => workspaces.value.find((w) => w.id === currentId.value) ?? null
   )
 
+  /** 默认工作空间（~/KeWork/DefaultWorkspace，机器级共享；未选择任何空间时的兜底） */
+  const defaultWorkspace = computed(
+    () => workspaces.value.find((w) => w.source === 'default') ?? null
+  )
+
   const filteredWorkspaces = computed(() => {
     const keyword = query.value.trim().toLowerCase()
-    if (!keyword) return workspaces.value
-    return workspaces.value.filter((w) => w.name.toLowerCase().includes(keyword))
+    const list = keyword
+      ? workspaces.value.filter((w) => w.name.toLowerCase().includes(keyword))
+      : [...workspaces.value]
+    // 默认空间置顶（首屏可见）
+    return list.sort((a, b) => Number(b.source === 'default') - Number(a.source === 'default'))
   })
 
   // ====== 方法(Actions) ======
@@ -52,15 +60,15 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
-  /** 从主进程加载工作空间列表；currentId 失效（空间被删）则清空选中 */
+  /** 从主进程加载当前用户的工作空间列表；currentId 未设置/失效则回落默认空间 */
   async function load(): Promise<void> {
     const result = await window.api.listWorkspaces()
     if (result.success && result.data) {
       workspaces.value = result.data
-    }
-    if (currentId.value && !workspaces.value.some((w) => w.id === currentId.value)) {
-      currentId.value = null
-      persistCurrentId()
+      if (!currentId.value || !workspaces.value.some((w) => w.id === currentId.value)) {
+        currentId.value = defaultWorkspace.value?.id ?? null
+        persistCurrentId()
+      }
     }
   }
 
@@ -95,17 +103,25 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     return true
   }
 
-  /** 不使用工作空间：~/KeWork/<YYYYMMDD-HHmmss> 时间戳目录 */
-  async function useTimestamp(): Promise<void> {
-    const result = await window.api.useTimestampWorkspace()
+  /** 使用默认工作空间：~/KeWork/DefaultWorkspace（未选择任何空间时的兜底目录） */
+  async function useDefault(): Promise<void> {
+    const result = await window.api.useDefaultWorkspace()
     if (!result.success || !result.data) {
-      console.error('[workspace] useTimestamp failed:', result.error)
+      console.error('[workspace] useDefault failed:', result.error)
       return
     }
     if (!workspaces.value.some((w) => w.id === result.data!.id)) {
       workspaces.value.unshift(result.data!)
     }
     currentId.value = result.data!.id
+    persistCurrentId()
+  }
+
+  /** 清空状态（登出时调用，防切换账号残留上一用户的空间列表/选中态） */
+  function reset(): void {
+    workspaces.value = []
+    currentId.value = null
+    query.value = ''
     persistCurrentId()
   }
 
@@ -139,13 +155,15 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     currentId,
     query,
     currentWorkspace,
+    defaultWorkspace,
     filteredWorkspaces,
     load,
     select,
     create,
     remove,
     selectExternal,
-    useTimestamp,
+    useDefault,
+    reset,
     open,
     listFiles,
     readFile

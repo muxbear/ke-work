@@ -128,6 +128,17 @@ export const useAgentStore = defineStore('agent', () => {
     }
   }
 
+  /** 重命名会话（主进程写自定义标题表；本地同步更新标题） */
+  async function renameConversation(id: string, title: string): Promise<void> {
+    const result = await window.api.renameConversation(id, title)
+    if (!result.success) throw new Error(result.error || '重命名失败')
+    const conv = conversations.value.find((c) => c.id === id)
+    if (conv) conv.title = title
+    if (currentConversation.value?.id === id) {
+      currentConversation.value.title = title
+    }
+  }
+
   async function deleteConversation(id: string): Promise<void> {
     await window.api.deleteConversation(id)
     const idx = conversations.value.findIndex((c) => c.id === id)
@@ -333,6 +344,7 @@ export const useAgentStore = defineStore('agent', () => {
     currentConversationId,
     createConversation,
     resetNewTask,
+    renameConversation,
     deleteConversation,
     batchDeleteConversations,
     loadConversations,

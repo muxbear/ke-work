@@ -102,6 +102,25 @@ describe('conversation IPC handlers（基于 LangGraph checkpointer）', () => {
     expect(deleteConversation).toHaveBeenCalledWith('real-user', 'c1')
   })
 
+  it('注册 conversation:rename 通道并透传 userId', async () => {
+    const ipc = createFakeIpcMain()
+    const session = new SessionService()
+    session.setCurrentUser('real-user')
+    const renameConversation = vi.fn().mockResolvedValue(undefined)
+    registerConversationHandlers(
+      ipc as never,
+      deps({ conversationStore: { renameConversation }, session })
+    )
+    expect(ipc.handle).toHaveBeenCalledWith('conversation:rename', expect.any(Function))
+
+    const noArg = await ipc.invoke<{ success: boolean; error?: string }>('conversation:rename', 'c1')
+    expect(noArg.success).toBe(false)
+
+    const ok = await ipc.invoke<{ success: boolean }>('conversation:rename', 'c1', '新标题')
+    expect(renameConversation).toHaveBeenCalledWith('real-user', 'c1', '新标题')
+    expect(ok.success).toBe(true)
+  })
+
   it('业务错误返回错误信息而不抛异常', async () => {
     const ipc = createFakeIpcMain()
     const session = new SessionService()

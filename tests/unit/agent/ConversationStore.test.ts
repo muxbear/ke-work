@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConversationStore } from '../../../src/main/agent/ConversationStore'
 import type { CheckpointTuple } from '@langchain/langgraph-checkpoint'
+import { LocalDataSource } from '../../../src/main/database/local/LocalDataSource'
 
 /** 构造 CheckpointTuple（简化版，贴近 JsonPlusSerializer 反序列化结果） */
 function makeTuple(
@@ -61,6 +62,36 @@ describe('ConversationStore（基于 LangGraph checkpointer 的会话服务）',
 
     expect(cp.list).toHaveBeenCalled()
     expect(list.map((c) => c.id)).toEqual(['c2', 'c1']) // 仅 u1 前缀 + 时间降序
+    expect(list[0].updateAt).toBe(300)
+  })
+
+  it('listConversations 同一会话多个 checkpoint（图的每步保存）去重为 1 个', async () => {
+    // 一次消息发送产生多个 checkpoint（LangGraph 每步保存），SqliteSaver.list 全部返回
+    const tuples = [
+      makeTuple('u:u1:c1', [{ id: 'm1', role: 'human', content: '第一步' }], new Date(100)),
+      makeTuple(
+        'u:u1:c1',
+        [
+          { id: 'm1', role: 'human', content: '第一步' },
+          { id: 'm2', role: 'ai', content: '回复' }
+        ],
+        new Date(200)
+      ),
+      makeTuple(
+        'u:u1:c1',
+        [
+          { id: 'm1', role: 'human', content: '第一步' },
+          { id: 'm2', role: 'ai', content: '回复' },
+          { id: 'm3', role: 'human', content: '追问' }
+        ],
+        new Date(300)
+      )
+    ]
+    const store = new ConversationStore(() => makeCheckpointer(tuples) as never)
+
+    const list = await store.listConversations('u1')
+    expect(list).toHaveLength(1) // 同一 thread 只保留最新
+    expect(list[0].id).toBe('c1')
     expect(list[0].updateAt).toBe(300)
   })
 
@@ -208,5 +239,57 @@ describe('ConversationStore（基于 LangGraph checkpointer 的会话服务）',
     await store.deleteConversation('u1', 'c9')
 
     expect(cp.deleteThread).toHaveBeenCalledWith('u:u1:c9')
+  })
+})
+
+describe('ConversationStore 自定义标题（conversation_titles 表）', () => {
+  let ds: LocalDataSource
+
+  beforeEach(() => {
+    ds = new LocalDataSource(':memory:')
+  })
+
+  afterEach(() => {
+    ds.close()
+  })
+
+  it('renameConversation 后 listConversations 标题优先于派生标题', async () => {
+    const tuples = [
+      makeTuple('u:u1:c1', [{ id: 'm1', role: 'human', content: '原始问题内容' }], new Date(100))
+    ]
+    const store = new ConversationStore(() => makeCheckpointer(tuples) as never, () => ds.getDb())
+
+    await store.renameConversation('u1', 'c1', '自定义标题')
+    const list = await store.listConversations('u1')
+
+    expect(list[0].title).toBe('自定义标题')
+  })
+
+  it('未重命名的会话标题仍由首条消息派生', async () => {
+    const tuples = [
+      makeTuple('u:u1:c1', [{ id: 'm1', role: 'human', content: '派生标题来源' }], new Date(100))
+    ]
+    const store = new ConversationStore(() => makeCheckpointer(tuples) as never, () => ds.getDb())
+
+    const list = await store.listConversations('u1')
+    expect(list[0].title).toBe('派生标题来源')
+  })
+
+  it('renameConversation 标题为空/纯空格抛错', async () => {
+    const store = new ConversationStore(() => makeCheckpointer([]) as never, () => ds.getDb())
+    await expect(store.renameConversation('u1', 'c1', '   ')).rejects.toThrow(/不能为空/)
+  })
+
+  it('deleteConversation 联动删除自定义标题记录', async () => {
+    const store = new ConversationStore(() => makeCheckpointer([]) as never, () => ds.getDb())
+
+    await store.renameConversation('u1', 'c1', '临时标题')
+    await store.deleteConversation('u1', 'c1')
+
+    const row = ds
+      .getDb()
+      .prepare('SELECT * FROM conversation_titles WHERE user_id = ? AND conversation_id = ?')
+      .get('u1', 'c1')
+    expect(row).toBeUndefined()
   })
 })

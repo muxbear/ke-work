@@ -73,6 +73,27 @@ CREATE TABLE IF NOT EXISTS workspaces (
 );
 CREATE INDEX IF NOT EXISTS idx_workspaces_created ON workspaces(created_at DESC);
 `
+  },
+  {
+    // 会话自定义标题（重命名覆盖；列表读取时优先于此表，未覆盖时用首条消息派生标题）
+    version: 5,
+    sql: `
+CREATE TABLE IF NOT EXISTS conversation_titles (
+  user_id         TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  title           TEXT NOT NULL,
+  updated_at      INTEGER NOT NULL,
+  PRIMARY KEY (user_id, conversation_id)
+);
+`
+  },
+  {
+    // 工作空间归属用户：NULL = 无主旧数据（首次加载时接管）或机器级共享的默认空间记录
+    version: 6,
+    sql: `
+ALTER TABLE workspaces ADD COLUMN user_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_workspaces_user ON workspaces(user_id, created_at DESC);
+`
   }
 ]
 

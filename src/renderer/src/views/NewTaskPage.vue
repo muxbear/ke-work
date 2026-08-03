@@ -271,10 +271,10 @@ const pickExternal = async (): Promise<void> => {
   await workspaceStore.selectExternal()
 }
 
-/** 不使用工作空间（~/KeWork/<时间戳> 目录） */
-const pickTimestamp = async (): Promise<void> => {
+/** 使用默认工作空间（~/KeWork/DefaultWorkspace，未选择任何空间时的兜底目录） */
+const pickDefault = async (): Promise<void> => {
   wsMenuOpen.value = false
-  await workspaceStore.useTimestamp()
+  await workspaceStore.useDefault()
 }
 
 /** 打开"新建工作空间"弹窗 */
@@ -629,14 +629,13 @@ watch(
                   </svg>
                   <span class="ws-item-name">打开本地文件夹</span>
                 </button>
-                <!-- ⑤ 不使用工作空间 -->
-                <button class="ws-item" @click="pickTimestamp">
+                <!-- ⑤ 使用默认工作空间 -->
+                <button class="ws-item" @click="pickDefault">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     class="ws-item-icon">
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                   </svg>
-                  <span class="ws-item-name">不使用工作空间</span>
+                  <span class="ws-item-name">默认工作空间</span>
                 </button>
               </div>
             </Transition>

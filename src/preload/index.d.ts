@@ -69,6 +69,8 @@ export interface ConversationAPI {
   listConversations(): Promise<IpcResult<Conversation[]>>
   getConversation(id: string): Promise<IpcResult<{ id: string; messages: ConversationMessage[] }>>
   deleteConversation(id: string): Promise<IpcResult<null>>
+  /** 重命名会话（自定义标题，列表读取时优先） */
+  renameConversation(id: string, title: string): Promise<IpcResult<null>>
 }
 
 export interface ModeAPI {
@@ -78,12 +80,13 @@ export interface ModeAPI {
   checkSession(): Promise<IpcResult<{ loggedIn: boolean }>>
 }
 
-/** 工作空间（workspaces 表行；source: created=新建 / external=打开本地文件夹 / timestamp=不使用工作空间） */
+/** 工作空间（workspaces 表行；source: created=新建 / external=打开本地文件夹 / timestamp=旧版时间戳 / default=默认工作空间；userId 为 null 表示机器级共享的默认空间） */
 export interface Workspace {
   id: string
   name: string
   path: string
-  source: 'created' | 'external' | 'timestamp'
+  source: 'created' | 'external' | 'timestamp' | 'default'
+  userId: string | null
   createdAt: number
 }
 
@@ -105,9 +108,11 @@ export interface WorkspaceAPI {
   createWorkspace(name: string): Promise<IpcResult<Workspace>>
   /** 打开系统目录选择窗口；用户取消时 data 为 null */
   selectWorkspaceDir(): Promise<IpcResult<Workspace | null>>
-  /** 不使用工作空间：~/KeWork/<YYYYMMDD-HHmmss> 时间戳目录 */
-  useTimestampWorkspace(): Promise<IpcResult<Workspace>>
+  /** 使用默认工作空间：~/KeWork/DefaultWorkspace（未选择任何空间时的兜底） */
+  useDefaultWorkspace(): Promise<IpcResult<Workspace>>
   openWorkspace(id: string): Promise<IpcResult<null>>
+  /** 打开默认工作目录（~/.ke-work/workspace，未绑定空间的会话使用） */
+  openDefaultWorkspace(): Promise<IpcResult<null>>
   /** 从列表中删除工作空间（仅删记录，不动磁盘文件夹） */
   deleteWorkspace(id: string): Promise<IpcResult<null>>
   /** 列出工作空间下相对路径目录的条目（顶层传空串） */

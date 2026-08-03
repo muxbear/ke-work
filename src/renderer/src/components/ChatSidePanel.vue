@@ -50,7 +50,8 @@ const panelWorkspaceId = computed(() => panelWorkspace.value?.id ?? null)
 const sourceLabel: Record<Workspace['source'], string> = {
   created: '新建',
   external: '本地文件夹',
-  timestamp: '临时'
+  timestamp: '临时',
+  default: '默认'
 }
 
 /** 会话概要 */

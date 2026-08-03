@@ -11,6 +11,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { useAgentStore } from '@renderer/store/agent'
 import { useWorkspaceStore } from '@renderer/store/workspace'
 import type { Conversation } from '@renderer/store/agent'
+import type { Workspace } from '../../../preload/index.d'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -68,55 +69,53 @@ const toggleChatMenu = (chatId: string): void => {
 }
 
 // ── hover 菜单状态机：滑到三个点按钮上弹出，离开按钮/菜单区域隐藏 ──
-const spaceMenuHover = ref(false)
-const chatMenuHover = ref(false)
+// 标准模式：按钮 mouseleave 延迟关闭（给鼠标移到菜单的时间），
+// 按钮/菜单 mouseenter 取消延迟，菜单 mouseleave 立即关闭（不依赖粘滞标志）
 let spaceMenuCloseTimer: ReturnType<typeof setTimeout> | null = null
 let chatMenuCloseTimer: ReturnType<typeof setTimeout> | null = null
 
 const openHoverSpaceMenu = (spaceKey: string): void => {
-  spaceMenuHover.value = true
   if (spaceMenuCloseTimer) clearTimeout(spaceMenuCloseTimer)
   activeSpaceMenu.value = spaceKey
   adjustMenuDirection()
 }
 
+/** 菜单面板 mouseenter：取消按钮离开时设置的延迟关闭 */
 const spaceMenuEnter = (): void => {
-  spaceMenuHover.value = true
+  if (spaceMenuCloseTimer) clearTimeout(spaceMenuCloseTimer)
 }
 
 /** 三点按钮 mouseleave：延迟关闭，给鼠标移动到菜单的时间 */
 const scheduleSpaceMenuClose = (): void => {
   if (spaceMenuCloseTimer) clearTimeout(spaceMenuCloseTimer)
   spaceMenuCloseTimer = setTimeout(() => {
-    if (!spaceMenuHover.value) activeSpaceMenu.value = null
-  }, 120)
+    activeSpaceMenu.value = null
+  }, 200)
 }
 
+/** 菜单面板 mouseleave：直接关闭 */
 const closeHoverSpaceMenu = (): void => {
-  spaceMenuHover.value = false
   activeSpaceMenu.value = null
 }
 
 const openHoverChatMenu = (chatId: string): void => {
-  chatMenuHover.value = true
   if (chatMenuCloseTimer) clearTimeout(chatMenuCloseTimer)
   activeChatMenu.value = chatId
   adjustMenuDirection()
 }
 
 const chatMenuEnter = (): void => {
-  chatMenuHover.value = true
+  if (chatMenuCloseTimer) clearTimeout(chatMenuCloseTimer)
 }
 
 const scheduleChatMenuClose = (): void => {
   if (chatMenuCloseTimer) clearTimeout(chatMenuCloseTimer)
   chatMenuCloseTimer = setTimeout(() => {
-    if (!chatMenuHover.value) activeChatMenu.value = null
-  }, 120)
+    activeChatMenu.value = null
+  }, 200)
 }
 
 const closeHoverChatMenu = (): void => {
-  chatMenuHover.value = false
   activeChatMenu.value = null
 }
 
@@ -159,28 +158,29 @@ const navItems = [
   { label: '更多' as NavKey, icon: 'more', tag: '资库·灵感' }
 ]
 
-/** 会话按工作空间分组（无绑定归"默认空间"）；组内按更新时间降序 */
+/** 会话按工作空间分组（遍历 workspaceStore.workspaces，含无会话的空空间）；无绑定会话归"默认空间"组 */
 interface ConversationGroup {
   key: string
-  ws: Conversation['workspace'] | null
+  ws: Workspace
   chats: Conversation[]
 }
 
 const conversationGroups = computed<ConversationGroup[]>(() => {
-  const map = new Map<string, ConversationGroup>()
+  // 默认空间置顶，其余保持列表序（创建时间降序）
+  const wsList = [...workspaceStore.workspaces].sort(
+    (a, b) => Number(b.source === 'default') - Number(a.source === 'default')
+  )
+  const groups = wsList.map<ConversationGroup>((ws) => ({ key: ws.id, ws, chats: [] }))
+  const byId = new Map(groups.map((g) => [g.ws.id, g]))
+  // 工作空间已被删除（记录不在列表）→ 该会话归"默认空间"（metadata 保留但不再展示旧分组）
+  const defaultGroup = workspaceStore.defaultWorkspace
+    ? byId.get(workspaceStore.defaultWorkspace.id)
+    : undefined
   for (const c of agentStore.sortedConversations) {
-    // 工作空间已被删除（记录不在列表）→ 该会话归"默认空间"（metadata 保留但不再展示旧分组）
-    const validWs =
-      c.workspace?.id && workspaceStore.workspaces.some((w) => w.id === c.workspace!.id)
-        ? c.workspace
-        : null
-    const key = validWs?.id ?? '__default__'
-    if (!map.has(key)) {
-      map.set(key, { key, ws: validWs ?? null, chats: [] })
-    }
-    map.get(key)!.chats.push(c)
+    const target = c.workspace?.id ? byId.get(c.workspace.id) : undefined
+    ;(target ?? defaultGroup)?.chats.push(c)
   }
-  return [...map.values()]
+  return groups
 })
 
 /** 点击会话回显历史（拉取消息 → 切到新建任务页；不能用 switchNav，它会新建会话） */
@@ -190,15 +190,60 @@ const openConversation = async (id: string): Promise<void> => {
   activeNav.value = '新建任务'
 }
 
-/** 打开工作空间文件夹（默认空间无绑定，禁用） */
-const openWorkspaceDir = (ws: Conversation['workspace'] | null): void => {
-  if (ws?.id) workspaceStore.open(ws.id)
+/** 打开空间文件夹：绑定空间打开其目录，默认空间打开默认工作空间目录 */
+const openWorkspaceDir = (ws: Workspace): void => {
+  activeSpaceMenu.value = null
+  workspaceStore.open(ws.id)
 }
 
-/** 删除会话（接 agentStore 已有 action） */
-const deleteChat = (id: string): void => {
+/** 打开会话的工作目录：绑定空间打开其目录，未绑定（默认空间）打开默认工作空间目录 */
+const openChatWorkspaceDir = (chat: Conversation): void => {
   activeChatMenu.value = null
-  agentStore.deleteConversation(id)
+  if (chat.workspace?.id) {
+    workspaceStore.open(chat.workspace.id)
+  } else {
+    const id = workspaceStore.defaultWorkspace?.id
+    if (id) workspaceStore.open(id)
+  }
+}
+
+/** 删除会话（接 agentStore 已有 action；失败仅记日志，不打断其他操作） */
+const deleteChat = async (id: string): Promise<void> => {
+  activeChatMenu.value = null
+  try {
+    await agentStore.deleteConversation(id)
+  } catch (err) {
+    console.error('[Home] delete conversation failed:', err)
+  }
+}
+
+// ── 重命名会话 ──
+const renameTarget = ref<Conversation | null>(null)
+const renameTitle = ref('')
+const renameError = ref('')
+const renaming = ref(false)
+
+const openRename = (chat: Conversation): void => {
+  activeChatMenu.value = null
+  renameTarget.value = chat
+  renameTitle.value = chat.title
+  renameError.value = ''
+}
+
+const confirmRename = async (): Promise<void> => {
+  if (!renameTarget.value || renaming.value) return
+  const title = renameTitle.value.trim()
+  if (!title) return
+  renaming.value = true
+  renameError.value = ''
+  try {
+    await agentStore.renameConversation(renameTarget.value.id, title)
+    renameTarget.value = null
+  } catch (err) {
+    renameError.value = err instanceof Error ? err.message : '重命名失败'
+  } finally {
+    renaming.value = false
+  }
 }
 
 /** 相对时间格式化：今天 HH:mm / 昨天 / N天前 */
@@ -242,6 +287,7 @@ const handleLogout = async (): Promise<void> => {
     showLogoutConfirm.value = false
     userMenuOpen.value = false
     userStore.logout() // 清渲染层 pinia + localStorage
+    workspaceStore.reset() // 清工作空间列表/选中态，防切换账号残留
     await router.push('/') // 此时主进程 session 已清，守卫放行至登录页
   } catch (err: unknown) {
     // 主进程登出失败：保留本地登录态并提示，避免被守卫弹回 /home 的残缺态
@@ -402,8 +448,12 @@ const adjustMenuDirection = (): void => {
         <Transition name="space-collapse">
           <div v-show="spaceOpen" class="spaces-list">
             <div v-for="group in conversationGroups" :key="group.key" class="space-group">
-              <div class="space-header">
-                <svg v-if="group.ws" width="12" height="12" viewBox="0 0 24 24" fill="none"
+              <div class="space-header"
+                :class="{
+                  'space-header--active': group.ws.id === workspaceStore.currentId,
+                  'space-header--menu-open': activeSpaceMenu === group.key
+                }">
+                <svg v-if="group.ws.source !== 'default'" width="12" height="12" viewBox="0 0 24 24" fill="none"
                   stroke="currentColor" stroke-width="2" stroke-linecap="round">
                   <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                 </svg>
@@ -415,7 +465,7 @@ const adjustMenuDirection = (): void => {
                   <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
                   <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
                 </svg>
-                <span>{{ group.ws?.name ?? '默认空间' }}</span>
+                <span>{{ group.ws.name }}</span>
                 <div class="space-header-right">
                   <div class="space-header-actions">
                     <button class="space-header-btn space-header-menu" type="button" data-space-menu-trigger
@@ -428,10 +478,11 @@ const adjustMenuDirection = (): void => {
                         <circle cx="12" cy="19" r="1" />
                       </svg>
                     </button>
-                    <Transition name="dropdown">
-                      <div v-if="activeSpaceMenu === group.key" class="space-menu" @mouseenter="spaceMenuEnter"
-                        @mouseleave="closeHoverSpaceMenu">
-                        <button class="space-menu-item" type="button" :disabled="!group.ws"
+                    <!-- 菜单切换（hover 快速掠过多个按钮）时旧菜单立即移除，仅保留入场动画，
+                         避免 Transition leave+enter 并存导致多个菜单叠放 -->
+                    <div v-if="activeSpaceMenu === group.key" class="space-menu" @mouseenter="spaceMenuEnter"
+                      @mouseleave="closeHoverSpaceMenu">
+                        <button class="space-menu-item" type="button"
                           @click.stop="openWorkspaceDir(group.ws)">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round">
@@ -439,8 +490,9 @@ const adjustMenuDirection = (): void => {
                           </svg>
                           打开文件夹
                         </button>
-                        <button class="space-menu-item space-menu-item--danger" type="button" :disabled="!group.ws"
-                          @click.stop="group.ws && deleteWorkspaceItem(group.ws.id)">
+                        <!-- 默认空间为机器级共享记录，不可从列表中删除 -->
+                        <button v-if="group.ws.source !== 'default'" class="space-menu-item space-menu-item--danger" type="button"
+                          @click.stop="deleteWorkspaceItem(group.ws.id)">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round">
                             <polyline points="3 6 5 6 21 6" />
@@ -449,9 +501,8 @@ const adjustMenuDirection = (): void => {
                           从列表中删除
                         </button>
                       </div>
-                    </Transition>
                     <button class="space-header-btn space-header-add" type="button" title="添加子项"
-                      @click.stop="handleAddSpaceItem(group.ws?.name ?? '默认空间')">
+                      @click.stop="handleAddSpaceItem(group.ws.name)">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round">
                         <line x1="12" y1="5" x2="12" y2="19" />
@@ -473,7 +524,13 @@ const adjustMenuDirection = (): void => {
               <Transition name="space-collapse">
                 <div v-show="!collapsedSpaces[group.key]" class="space-children">
                   <div v-for="chat in group.chats" :key="chat.id"
-                    :class="['space-chat', { 'space-chat--active': chat.id === agentStore.currentConversationId }]"
+                    :class="[
+                      'space-chat',
+                      {
+                        'space-chat--active': chat.id === agentStore.currentConversationId,
+                        'space-chat--menu-open': activeChatMenu === chat.id
+                      }
+                    ]"
                     @click="openConversation(chat.id)">
                     <div class="space-chat-main">
                       <p class="space-chat-title">{{ chat.title }}</p>
@@ -490,17 +547,16 @@ const adjustMenuDirection = (): void => {
                             <circle cx="12" cy="19" r="1" />
                           </svg>
                         </button>
-                        <Transition name="dropdown">
-                          <div v-if="activeChatMenu === chat.id" class="chat-menu" @mouseenter="chatMenuEnter"
-                            @mouseleave="closeHoverChatMenu">
-                            <button class="chat-menu-item" type="button" @click.stop>
+                        <div v-if="activeChatMenu === chat.id" class="chat-menu" @mouseenter="chatMenuEnter"
+                          @mouseleave="closeHoverChatMenu">
+                            <button class="chat-menu-item" type="button" @click.stop="openChatWorkspaceDir(chat)">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2" stroke-linecap="round">
                                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                               </svg>
                               打开文件夹
                             </button>
-                            <button class="chat-menu-item" type="button" @click.stop>
+                            <button class="chat-menu-item" type="button" @click.stop="openRename(chat)">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2" stroke-linecap="round">
                                 <polyline points="1 4 1 10 7 10" />
@@ -518,8 +574,7 @@ const adjustMenuDirection = (): void => {
                               </svg>
                               删除任务
                             </button>
-                          </div>
-                        </Transition>
+                        </div>
                       </div>
                       <button class="space-chat-action-btn" title="归档" @click.stop="handleArchiveChat(chat.id)">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -655,6 +710,34 @@ const adjustMenuDirection = (): void => {
       @confirm="handleLogout"
       @cancel="showLogoutConfirm = false"
     />
+
+    <!-- 重命名会话 Modal -->
+    <Transition name="modal">
+      <div v-if="renameTarget" class="rename-mask" @click.self="renameTarget = null">
+        <div class="rename-card">
+          <div class="rename-header">
+            <span>重命名会话</span>
+            <button class="rename-close" aria-label="关闭" @click="renameTarget = null">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+          <div class="rename-body">
+            <input v-model="renameTitle" class="rename-input" maxlength="50" placeholder="输入新的会话标题"
+              @keydown.enter.prevent="confirmRename" />
+            <p v-if="renameError" class="rename-error">{{ renameError }}</p>
+          </div>
+          <div class="rename-footer">
+            <button class="rename-btn rename-btn--cancel" @click="renameTarget = null">取消</button>
+            <button class="rename-btn rename-btn--confirm" :disabled="renaming || !renameTitle.trim()"
+              @click="confirmRename">保存</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
 
     <!-- ════════════════════════════════════════════════ CONTENT ═══════════════════════════════════════════════════════ -->
     <main class="content-area">
@@ -971,6 +1054,19 @@ const adjustMenuDirection = (): void => {
   background: rgba(8, 145, 178, 0.03);
 }
 
+/* 当前激活工作空间（新建任务页右下角选中）标记 */
+.space-header--active {
+  background: rgba(8, 145, 178, 0.08);
+}
+
+.space-header--active svg {
+  color: #0891b2;
+}
+
+.space-header--active span {
+  color: #0891b2;
+}
+
 .space-header span {
   flex: 1;
   color: #374151;
@@ -1000,7 +1096,9 @@ const adjustMenuDirection = (): void => {
     visibility 0.15s ease;
 }
 
-.space-header:hover .space-header-actions {
+.space-header:hover .space-header-actions,
+/* 菜单打开时保持可见：菜单定位在组头边界外，鼠标移入菜单会离开 :hover 范围 */
+.space-header--menu-open .space-header-actions {
   opacity: 1;
   visibility: visible;
 }
@@ -1181,7 +1279,9 @@ const adjustMenuDirection = (): void => {
     visibility 0.15s ease;
 }
 
-.space-chat:hover .space-chat-actions {
+.space-chat:hover .space-chat-actions,
+/* 菜单打开时保持可见：菜单定位在会话项边界外，鼠标移入菜单会离开 :hover 范围 */
+.space-chat--menu-open .space-chat-actions {
   opacity: 1;
   visibility: visible;
 }
@@ -1674,18 +1774,149 @@ const adjustMenuDirection = (): void => {
   opacity: 0;
 }
 
-/* Dropdown transition */
-.dropdown-enter-active,
-.dropdown-leave-active {
-  transition:
-    opacity 0.15s ease,
-    transform 0.15s ease;
+/* 菜单入场动画：仅 enter（无 leave），切换时旧菜单立即移除，避免多个菜单叠放 */
+@keyframes menu-drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.dropdown-enter-from,
-.dropdown-leave-to {
+.space-menu,
+.chat-menu {
+  animation: menu-drop-in 0.15s ease;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Rename Modal（重命名会话）
+   ═══════════════════════════════════════════════════════════════════════════ */
+.rename-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.rename-card {
+  width: 360px;
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2);
+  overflow: hidden;
+}
+
+.rename-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a2332;
+}
+
+.rename-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.rename-close:hover {
+  background: #f3f4f6;
+}
+
+.rename-body {
+  padding: 0 20px 8px;
+}
+
+.rename-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1px solid #d1d9e6;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #1a2332;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.rename-input:focus {
+  border-color: #0891b2;
+  box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.12);
+}
+
+.rename-error {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #ef4444;
+}
+
+.rename-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 20px 16px;
+}
+
+.rename-btn {
+  padding: 8px 18px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.rename-btn--cancel {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.rename-btn--cancel:hover {
+  background: #e5e7eb;
+}
+
+.rename-btn--confirm {
+  background: linear-gradient(135deg, #0891b2, #0e7490);
+  color: #ffffff;
+}
+
+.rename-btn--confirm:hover {
+  opacity: 0.9;
+}
+
+.rename-btn--confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
   opacity: 0;
-  transform: translateY(4px);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

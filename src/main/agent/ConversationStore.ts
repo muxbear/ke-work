@@ -1,4 +1,5 @@
 import type { BaseCheckpointSaver, CheckpointTuple } from '@langchain/langgraph-checkpoint'
+import type { Database } from 'better-sqlite3'
 
 /** 会话绑定的工作空间（checkpoint metadata 派生；无绑定为 undefined，归"默认空间"） */
 export interface ConversationWorkspace {
@@ -63,7 +64,25 @@ const DEFAULT_TITLE = '新对话'
  * - 删除会话 = checkpointer.deleteThread()
  */
 export class ConversationStore {
-  constructor(private readonly getCheckpointer: () => BaseCheckpointSaver) {}
+  constructor(
+    private readonly getCheckpointer: () => BaseCheckpointSaver,
+    private readonly getDb?: () => Database
+  ) {}
+
+  /** 读取用户全部会话的自定义标题（conversation_titles 表，按用户隔离） */
+  private loadCustomTitles(userId: string): Map<string, string> {
+    const map = new Map<string, string>()
+    if (!this.getDb) return map
+    try {
+      const rows = this.getDb()
+        .prepare('SELECT conversation_id, title FROM conversation_titles WHERE user_id = ?')
+        .all(userId) as Array<{ conversation_id: string; title: string }>
+      for (const row of rows) map.set(row.conversation_id, row.title)
+    } catch (err) {
+      console.error('[ConversationStore] loadCustomTitles failed:', err)
+    }
+    return map
+  }
 
   /** 构造 thread_id（用户隔离单点：入参不信任，统一由 userId 合成） */
   buildThreadId(userId: string, conversationId: string): string {
@@ -113,19 +132,47 @@ export class ConversationStore {
       return (bt ?? new Date(0)).getTime() - (at ?? new Date(0)).getTime()
     })
 
-    return tuples.map((tuple) => {
+    // 同一会话（thread_id）的多个 checkpoint 版本（LangGraph 图的每步都保存）只保留最新一个，
+    // 否则侧栏会出现多个相同 id 的任务项（hover 菜单同时打开、数据重复展示）
+    const seenThreads = new Set<string>()
+    const uniqueTuples: CheckpointTuple[] = []
+    for (const tuple of tuples) {
+      const threadId = tuple.config.configurable?.thread_id
+      if (typeof threadId !== 'string' || seenThreads.has(threadId)) continue
+      seenThreads.add(threadId)
+      uniqueTuples.push(tuple)
+    }
+
+    // 自定义标题（重命名）优先，未覆盖时用首条消息派生标题
+    const customTitles = this.loadCustomTitles(userId)
+
+    return uniqueTuples.map((tuple) => {
       const threadId = tuple.config.configurable?.thread_id as string
+      const conversationId = threadId.slice(prefix.length)
       const meta = tuple.metadata as Record<string, unknown> | undefined
       const created = (meta?.created_at as Date | undefined) ?? new Date(0)
       const updated = (meta?.updated_at as Date | undefined) ?? created
       return {
-        id: threadId.slice(prefix.length),
-        title: this.deriveTitle(tuple),
+        id: conversationId,
+        title: customTitles.get(conversationId) ?? this.deriveTitle(tuple),
         createAt: created.getTime(),
         updateAt: updated.getTime(),
         workspace: this.readWorkspace(tuple)
       }
     })
+  }
+
+  /** 重命名会话（自定义标题写 conversation_titles 表，列表读取时优先） */
+  async renameConversation(userId: string, conversationId: string, title: string): Promise<void> {
+    if (!this.getDb) throw new Error('会话重命名不可用')
+    const trimmed = title.trim().slice(0, 50)
+    if (!trimmed) throw new Error('标题不能为空')
+    this.getDb()
+      .prepare(
+        'INSERT INTO conversation_titles (user_id, conversation_id, title, updated_at) VALUES (?, ?, ?, ?) ' +
+          'ON CONFLICT(user_id, conversation_id) DO UPDATE SET title = excluded.title, updated_at = excluded.updated_at'
+      )
+      .run(userId, conversationId, trimmed, Date.now())
   }
 
   /** 读取会话绑定的工作空间（agent:send 时主进程权威解析：已绑定 > 渲染层当前选择） */
@@ -183,9 +230,14 @@ export class ConversationStore {
       .filter((m): m is ConversationMessage => m !== null)
   }
 
-  /** 删除会话（仅删 checkpoint；store 长期记忆按用户命名空间，不随会话删除） */
+  /** 删除会话（删 checkpoint + 自定义标题记录；store 长期记忆按用户命名空间，不随会话删除） */
   async deleteConversation(userId: string, conversationId: string): Promise<void> {
     const checkpointer = this.getCheckpointer()
     await checkpointer.deleteThread(this.buildThreadId(userId, conversationId))
+    if (this.getDb) {
+      this.getDb()
+        .prepare('DELETE FROM conversation_titles WHERE user_id = ? AND conversation_id = ?')
+        .run(userId, conversationId)
+    }
   }
 }

@@ -66,6 +66,9 @@ const api = {
   deleteConversation(id: string) {
     return ipcRenderer.invoke('conversation:delete', id)
   },
+  renameConversation(id: string, title: string) {
+    return ipcRenderer.invoke('conversation:rename', id, title)
+  },
   // ── 工作模式 API ──
   getWorkMode() {
     return ipcRenderer.invoke('mode:get')
@@ -86,11 +89,14 @@ const api = {
   selectWorkspaceDir() {
     return ipcRenderer.invoke('workspace:select-dir')
   },
-  useTimestampWorkspace() {
-    return ipcRenderer.invoke('workspace:timestamp')
+  useDefaultWorkspace() {
+    return ipcRenderer.invoke('workspace:default')
   },
   openWorkspace(id: string) {
     return ipcRenderer.invoke('workspace:open', id)
+  },
+  openDefaultWorkspace() {
+    return ipcRenderer.invoke('workspace:open-default')
   },
   deleteWorkspace(id: string) {
     return ipcRenderer.invoke('workspace:delete', id)

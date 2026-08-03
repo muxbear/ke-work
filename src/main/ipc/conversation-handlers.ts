@@ -53,4 +53,17 @@ export function registerConversationHandlers(ipc: IpcMain, deps: ConversationHan
       return fail((err as Error).message)
     }
   })
+
+  ipc.handle('conversation:rename', async (_event, id?: unknown, title?: unknown) => {
+    if (typeof id !== 'string' || !id || typeof title !== 'string' || !title.trim()) {
+      return fail('参数错误')
+    }
+    try {
+      const userId = session.requireUserId()
+      await conversationStore.renameConversation(userId, id, title)
+      return ok(null)
+    } catch (err) {
+      return fail((err as Error).message)
+    }
+  })
 }

@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events'
 import { join } from 'path'
 import { homedir } from 'os'
+import type { Database } from 'better-sqlite3'
 import type { WorkMode } from '../mode/work-mode'
 import type { IConfigRepository } from './interfaces/IConfigRepository'
 import type { IAuthRepository } from './interfaces/IAuthRepository'
@@ -99,6 +100,11 @@ export class DataSourceFactory {
   /** 工作空间仓储（机器级资源，与工作模式无关，复用本地连接） */
   createWorkspaceRepository(): WorkspaceRepository {
     return new WorkspaceRepository(this.getLocalDataSource().getDb())
+  }
+
+  /** 本地数据库连接（会话自定义标题等业务表使用；cloud 模式同样落本地） */
+  getLocalDb(): Database.Database {
+    return this.getLocalDataSource().getDb()
   }
 
   private getLocalDataSource(): LocalDataSource {
