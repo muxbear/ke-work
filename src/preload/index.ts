@@ -40,6 +40,18 @@ const api = {
     ipcRenderer.on('agent:stream-done', callback)
     return () => ipcRenderer.removeListener('agent:stream-done', callback)
   },
+  onConversationTitleUpdated(
+    callback: (data: { conversationId: string; title: string }) => void
+  ): () => void {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      data: { conversationId: string; title: string }
+    ): void => {
+      callback(data)
+    }
+    ipcRenderer.on('conversation:title-updated', handler)
+    return () => ipcRenderer.removeListener('conversation:title-updated', handler)
+  },
   // ── 认证 API ──
   loginByPassword(account: string, password: string) {
     return ipcRenderer.invoke('auth:login-password', account, password)

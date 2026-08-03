@@ -4,6 +4,7 @@ import { homedir } from 'os'
 import { randomBytes, randomUUID } from 'crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { invokeSendMessage, toLangChainMessages, buildRegenerateInput } from './agent/service'
+import { summarizeTitle } from './agent/title-service'
 import { HumanMessage } from '@langchain/core/messages'
 import { detectOS } from './platform'
 import { getDataDirectory, initDataDirectory } from './data-dir'
@@ -258,6 +259,8 @@ app.whenReady().then(() => {
           },
           controller.signal
         )
+        // 对话流完成后异步生成 AI 总结标题（不阻塞响应；失败静默兜底为派生标题）
+        void generateConversationTitle(userId, conversationId, win)
         console.log('[main] invokeSendMessage completed, returning success')
         return { success: true }
       } catch (error) {
@@ -277,6 +280,27 @@ app.whenReady().then(() => {
       controller?.abort()
     }
   })
+
+  /**
+   * 对话流结束后异步生成 AI 总结标题并推送更新事件（渲染层侧栏即时刷新）
+   * 失败（LLM 不可用/超时）时静默——会话标题保持派生标题（首条消息截断兜底）
+   */
+  async function generateConversationTitle(
+    userId: string,
+    conversationId: string,
+    win: BrowserWindow
+  ): Promise<void> {
+    try {
+      const messages = await conversationStore.getMessages(userId, conversationId)
+      if (messages.length === 0) return
+      const title = await summarizeTitle(messages)
+      if (!title) return
+      conversationStore.saveAutoTitle(userId, conversationId, title)
+      win.webContents.send('conversation:title-updated', { conversationId, title })
+    } catch (err) {
+      console.error('[main] generate conversation title failed:', err)
+    }
+  }
 
   createWindow()
 

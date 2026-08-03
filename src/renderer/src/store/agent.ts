@@ -332,6 +332,12 @@ export const useAgentStore = defineStore('agent', () => {
     isThinking.value = false
   }
 
+  // AI 总结标题异步生成完成 → 更新本地会话标题（侧栏即时刷新，无需重新拉取列表）
+  window.api.onConversationTitleUpdated(({ conversationId, title }) => {
+    const conv = conversations.value.find((c) => c.id === conversationId)
+    if (conv) conv.title = title
+  })
+
   return {
     sidebarVisible,
     loaded,

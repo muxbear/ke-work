@@ -71,6 +71,10 @@ export interface ConversationAPI {
   deleteConversation(id: string): Promise<IpcResult<null>>
   /** 重命名会话（自定义标题，列表读取时优先） */
   renameConversation(id: string, title: string): Promise<IpcResult<null>>
+  /** 监听 AI 总结标题异步生成完成（主进程推送，侧栏即时刷新） */
+  onConversationTitleUpdated(
+    callback: (data: { conversationId: string; title: string }) => void
+  ): () => void
 }
 
 export interface ModeAPI {

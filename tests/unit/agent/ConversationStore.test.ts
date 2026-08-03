@@ -95,9 +95,9 @@ describe('ConversationStore（基于 LangGraph checkpointer 的会话服务）',
     expect(list[0].updateAt).toBe(300)
   })
 
-  it('listConversations 标题派生：首条 user 消息前 30 字符截断', async () => {
+  it('listConversations 标题派生：首条 user 消息前 20 字符截断', async () => {
     const longContent = '这是一条非常非常非常非常非常非常非常非常非常非常非常长的消息内容'
-    expect(longContent.length).toBeGreaterThan(30)
+    expect(longContent.length).toBeGreaterThan(20)
     const tuples = [
       makeTuple('u:u1:c1', [
         { id: 'm1', role: 'system', content: '系统提示' },
@@ -107,7 +107,39 @@ describe('ConversationStore（基于 LangGraph checkpointer 的会话服务）',
     const store = new ConversationStore(() => makeCheckpointer(tuples) as never)
 
     const list = await store.listConversations('u1')
-    expect(list[0].title).toBe(`${longContent.slice(0, 30)}...`)
+    expect(list[0].title).toBe(`${longContent.slice(0, 20)}...`)
+  })
+
+  it('listConversations 标题派生：user 消息 content 为 blocks 数组时解析文本', async () => {
+    // 新版 LangChain 序列化后 user 消息 content 可能为 blocks 数组
+    const tuples = [
+      makeTuple('u:u1:c1', [
+        { id: 'm1', role: 'human', content: [{ type: 'text', text: '帮我写一个项目方案' }] }
+      ], new Date(100))
+    ]
+    const store = new ConversationStore(() => makeCheckpointer(tuples) as never)
+
+    const list = await store.listConversations('u1')
+    expect(list[0].title).toBe('帮我写一个项目方案')
+  })
+
+  it('saveAutoTitle 写入且不覆盖用户手动重命名', async () => {
+    const ds = new LocalDataSource(':memory:')
+    const tuples = [
+      makeTuple('u:u1:c1', [{ id: 'm1', role: 'human', content: '原始消息' }], new Date(100))
+    ]
+    const store = new ConversationStore(() => makeCheckpointer(tuples) as never, () => ds.getDb())
+
+    store.saveAutoTitle('u1', 'c1', 'AI 总结标题')
+    const list1 = await store.listConversations('u1')
+    expect(list1[0].title).toBe('AI 总结标题')
+
+    // 手动重命名后，后续 AI 总结不再覆盖（INSERT OR IGNORE）
+    await store.renameConversation('u1', 'c1', '手动标题')
+    store.saveAutoTitle('u1', 'c1', '新 AI 标题')
+    const list2 = await store.listConversations('u1')
+    expect(list2[0].title).toBe('手动标题')
+    ds.close()
   })
 
   it('listConversations 无消息时标题为默认', async () => {

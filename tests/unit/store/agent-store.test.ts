@@ -35,7 +35,8 @@ function createMockWindowApi() {
     onAgentChunk: vi.fn(() => () => {}),
     onAgentThinking: vi.fn(() => () => {}),
     onAgentThinkingDone: vi.fn(() => () => {}),
-    onAgentDone: vi.fn(() => () => {})
+    onAgentDone: vi.fn(() => () => {}),
+    onConversationTitleUpdated: vi.fn(() => () => {})
   }
 
   return { api, conversations }

@@ -51,7 +51,8 @@ function parseBlocks(content: unknown): { content: string; reasoning?: string } 
 }
 
 const THREAD_PREFIX = 'u:'
-const TITLE_MAX_LEN = 30
+/** 自动派生标题的长度上限（AI 总结与首条消息截断兜底统一严格限制） */
+const TITLE_MAX_LEN = 20
 const DEFAULT_TITLE = '新对话'
 
 /**
@@ -158,15 +159,30 @@ export class ConversationStore {
     }
   }
 
-  /** 从 checkpoint 派生会话标题：首条 user 消息截断（与原 DB 逻辑一致） */
+  /** 从 checkpoint 派生会话标题（兜底）：首条 user 消息解析（string 或新版 blocks 数组）后截断 */
   private deriveTitle(tuple: CheckpointTuple): string {
     const messages = tuple.checkpoint.channel_values?.messages as
       | Array<{ role?: string; content?: unknown }>
       | undefined
     const firstUser = messages?.find((m) => m.role === 'user' || m.role === 'human')
-    const content = typeof firstUser?.content === 'string' ? firstUser.content.trim() : ''
+    const parsed = firstUser ? parseBlocks(firstUser.content) : { content: '' }
+    const content = parsed.content.trim()
     if (!content) return DEFAULT_TITLE
     return content.length > TITLE_MAX_LEN ? `${content.slice(0, TITLE_MAX_LEN)}...` : content
+  }
+
+  /**
+   * 保存 AI 总结标题（conversation_titles 表，INSERT OR IGNORE——不覆盖用户手动重命名）
+   * 列表读取时 customTitles 优先于派生标题
+   */
+  saveAutoTitle(userId: string, conversationId: string, title: string): void {
+    if (!this.getDb) return
+    this.getDb()
+      .prepare(
+        'INSERT OR IGNORE INTO conversation_titles (user_id, conversation_id, title, updated_at) ' +
+          'VALUES (?, ?, ?, ?)'
+      )
+      .run(userId, conversationId, title.slice(0, TITLE_MAX_LEN), Date.now())
   }
 
   /** 列出某用户的全部会话（按更新时间降序） */
