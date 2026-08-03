@@ -9,9 +9,9 @@ const memoryImported = ref(false)
 <template>
   <div class="s-page">
     <p class="s-intro">
-      记忆让 WorkBuddy 记住你的偏好和习惯，对话越多，它就越懂你。记忆内容遵循
+      记忆让 KeWork 记住你的偏好和习惯，对话越多，它就越懂你。记忆内容遵循
       <button class="s-link">
-        WorkBuddy 隐私政策
+        KeWork 隐私政策
       </button>
       ，仅你本人可见。
     </p>
@@ -24,7 +24,7 @@ const memoryImported = ref(false)
             生成对话记忆
           </h2>
           <p class="s-desc s-desc--lg">
-            允许 WorkBuddy 从对话中提取并记住相关上下文，以便在未来对话中提供更连贯、个性化的回应。
+            允许 KeWork 从对话中提取并记住相关上下文，以便在未来对话中提供更连贯、个性化的回应。
           </p>
         </div>
         <SettingToggle v-model="conversationMemory" />

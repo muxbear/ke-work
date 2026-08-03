@@ -17,7 +17,7 @@ const items = [
         v-for="item in items"
         :key="item.title"
         class="s-item"
-        @click="openExternal('https://www.workbuddy.cn')"
+        @click="openExternal('https://www.ke-work.cn')"
       >
         <span class="s-item-name">
           <span class="s-item-icon">
@@ -108,14 +108,14 @@ const items = [
     <div class="s-bottom-links">
       <button
         class="s-bottom-link"
-        @click="openExternal('https://www.workbuddy.cn')"
+        @click="openExternal('https://www.ke-work.cn')"
       >
         隐私政策
       </button>
       <span class="s-sep">|</span>
       <button
         class="s-bottom-link"
-        @click="openExternal('https://www.workbuddy.cn')"
+        @click="openExternal('https://www.ke-work.cn')"
       >
         服务协议
       </button>

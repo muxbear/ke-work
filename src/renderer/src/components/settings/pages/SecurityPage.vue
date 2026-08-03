@@ -12,10 +12,10 @@ const systemToolMode = ref('禁用')
 const auditCleared = ref(false)
 
 const auditRecords = [
-  { text: '[网络访问] 网络访问已执行：https://www.workbuddy.cn/docs/workbuddy/', time: '2026/8/2 21:42:43' },
-  { text: '[网络访问] 网络访问已执行：https://www.workbuddy.cn/docs/workbuddy/Overview', time: '2026/8/2 21:42:43' },
-  { text: '[命令安全] 沙箱内执行命令：mkdir -p "D:/work/WorkBuddySpace/.workbuddy/memory" && ls', time: '2026/8/2 17:52:17' },
-  { text: "[命令安全] 沙箱内执行命令：python.exe -c import zipfile, os src = r'D:/work/WorkBuddySpace/frontend/dist'", time: '2026/8/2 17:52:05' },
+  { text: '[网络访问] 网络访问已执行：https://www.ke-work.cn/docs/ke-work/', time: '2026/8/2 21:42:43' },
+  { text: '[网络访问] 网络访问已执行：https://www.ke-work.cn/docs/ke-work/Overview', time: '2026/8/2 21:42:43' },
+  { text: '[命令安全] 沙箱内执行命令：mkdir -p "D:/work/KeWorkSpace/.ke-work/memory" && ls', time: '2026/8/2 17:52:17' },
+  { text: "[命令安全] 沙箱内执行命令：python.exe -c import zipfile, os src = r'D:/work/KeWorkSpace/frontend/dist'", time: '2026/8/2 17:52:05' },
 ]
 
 const sandboxRows = [

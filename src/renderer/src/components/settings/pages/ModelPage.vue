@@ -25,7 +25,7 @@ const removeModel = (): void => {
           </h3>
           <p class="s-desc s-desc--mt">
             管理写入到 <button class="s-link">
-              %USERPROFILE%\.workbuddy\models.json
+              %USERPROFILE%\.ke-work\models.json
             </button> 的本地自定义模型配置。
           </p>
         </div>
