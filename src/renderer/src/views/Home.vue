@@ -8,6 +8,7 @@ import ExpertPage from './ExpertPage.vue'
 import AutomationPage from './AutomationPage.vue'
 import NewTaskPage from './NewTaskPage.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import SettingsWindow from '../components/settings/SettingsWindow.vue'
 import { useAgentStore } from '@renderer/store/agent'
 import { useWorkspaceStore } from '@renderer/store/workspace'
 import type { Conversation } from '@renderer/store/agent'
@@ -295,6 +296,21 @@ const handleLogout = async (): Promise<void> => {
   } finally {
     logoutPending.value = false
   }
+}
+
+// ── 设置窗口 ──
+const settingsOpen = ref(false)
+
+/** 打开设置窗口（同时收起用户菜单） */
+const openSettings = (): void => {
+  userMenuOpen.value = false
+  settingsOpen.value = true
+}
+
+/** 设置窗口内点「退出登录」：先关设置窗口，再走现有确认流程 */
+const handleSettingsLogout = (): void => {
+  settingsOpen.value = false
+  openLogoutConfirm()
 }
 
 const switchNav = (nav: NavKey): void => {
@@ -635,7 +651,7 @@ const adjustMenuDirection = (): void => {
             </div>
             <!-- Menu items -->
             <div class="menu-section">
-              <button class="menu-item">
+              <button class="menu-item" @click="openSettings">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="12" cy="12" r="3" />
                   <path
@@ -709,6 +725,13 @@ const adjustMenuDirection = (): void => {
       confirm-text="确认登出"
       @confirm="handleLogout"
       @cancel="showLogoutConfirm = false"
+    />
+
+    <!-- 设置窗口（置于 ConfirmDialog 之后：同层 z-index 按 DOM 顺序绘制，退出登录确认框盖在设置窗口之上） -->
+    <SettingsWindow
+      :open="settingsOpen"
+      @close="settingsOpen = false"
+      @logout="handleSettingsLogout"
     />
 
     <!-- 重命名会话 Modal -->
