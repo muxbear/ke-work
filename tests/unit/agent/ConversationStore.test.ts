@@ -169,6 +169,60 @@ describe('ConversationStore（基于 LangGraph checkpointer 的会话服务）',
     expect(await store.getWorkspace('u1', 'nonexistent')).toBeNull()
   })
 
+  it('bindWorkspace 落库后 listConversations 从业务表读绑定（checkpoint metadata 无 workspace 也可）', async () => {
+    const ds = new LocalDataSource(':memory:')
+    const tuples = [
+      makeTuple('u:u1:c1', [{ id: 'm1', role: 'human', content: '绑定业务表' }], new Date(100))
+    ]
+    const store = new ConversationStore(() => makeCheckpointer(tuples) as never, () => ds.getDb())
+
+    // 模拟 agent:send 时主进程落库绑定（checkpoint metadata 里没有 workspace——LangGraph 实测不持久化）
+    store.bindWorkspace('u1', 'c1', { id: 'ws-2', name: '我的工作空间', dir: '/tmp/我的工作空间' })
+
+    const list = await store.listConversations('u1')
+    expect(list[0].workspace).toEqual({ id: 'ws-2', name: '我的工作空间', dir: '/tmp/我的工作空间' })
+    expect(await store.getWorkspace('u1', 'c1')).toEqual({
+      id: 'ws-2',
+      name: '我的工作空间',
+      dir: '/tmp/我的工作空间'
+    })
+
+    // 绑定表优先于 checkpoint metadata（两者同时存在时以业务表为准）
+    const boundTuple = makeTuple(
+      'u:u1:c1',
+      [{ id: 'm1', role: 'human', content: 'x' }],
+      new Date(200),
+      new Date(200),
+      { id: 'ws-1', name: '旧绑定' }
+    )
+    const store2 = new ConversationStore(() => makeCheckpointer([boundTuple]) as never, () => ds.getDb())
+    const list2 = await store2.listConversations('u1')
+    expect(list2[0].workspace?.id).toBe('ws-2') // 业务表 wins
+
+    // 未选择工作空间（null）时移除绑定
+    store.bindWorkspace('u1', 'c1', null)
+    const list3 = await store.listConversations('u1')
+    expect(list3[0].workspace).toBeNull()
+    ds.close()
+  })
+
+  it('deleteConversation 同时清理工作空间绑定记录', async () => {
+    const ds = new LocalDataSource(':memory:')
+    const tuples = [
+      makeTuple('u:u1:c1', [{ id: 'm1', role: 'human', content: '待删' }], new Date(100))
+    ]
+    const store = new ConversationStore(() => makeCheckpointer(tuples) as never, () => ds.getDb())
+    store.bindWorkspace('u1', 'c1', { id: 'ws-2', name: '我的工作空间' })
+
+    await store.deleteConversation('u1', 'c1')
+    const row = ds
+      .getDb()
+      .prepare('SELECT COUNT(*) AS c FROM conversation_workspaces WHERE user_id = ? AND conversation_id = ?')
+      .get('u1', 'c1') as { c: number }
+    expect(row.c).toBe(0)
+    ds.close()
+  })
+
   it('getMessages 解析 AI 消息块（text 拼接为正文、reasoning 提取为思考）', async () => {
     const tuples = [
       makeTuple('u:u1:c1', [

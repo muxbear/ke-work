@@ -241,6 +241,11 @@ app.whenReady().then(() => {
             ? workspaceService.resolveWorkspace(workspaceId, userId)
             : null)
 
+        // 会话→工作空间绑定落库（业务表显式存储；LangGraph checkpoint metadata 不可靠，会话列表据此分组）
+        if (ws) {
+          conversationStore.bindWorkspace(userId, conversationId, ws)
+        }
+
         await invokeSendMessage(
           messages,
           win,

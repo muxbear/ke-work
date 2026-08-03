@@ -16,13 +16,18 @@ describe('WorkspaceRepository（workspaces 表）', () => {
     ds.close()
   })
 
-  it('WSR-01: migration v4/v5/v6 生效（user_version=6，workspaces 含 user_id 列）', () => {
-    expect(ds.getDb().pragma('user_version', { simple: true })).toBe(6)
+  it('WSR-01: migration v4-v7 生效（user_version=7，workspaces 含 user_id 列）', () => {
+    expect(ds.getDb().pragma('user_version', { simple: true })).toBe(7)
     const titles = ds
       .getDb()
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='conversation_titles'")
       .get()
     expect(titles).toBeTruthy()
+    const wsBindings = ds
+      .getDb()
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='conversation_workspaces'")
+      .get()
+    expect(wsBindings).toBeTruthy()
     const cols = ds
       .getDb()
       .prepare('PRAGMA table_info(workspaces)')

@@ -94,6 +94,21 @@ CREATE TABLE IF NOT EXISTS conversation_titles (
 ALTER TABLE workspaces ADD COLUMN user_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_workspaces_user ON workspaces(user_id, created_at DESC);
 `
+  },
+  {
+    // 会话→工作空间绑定（业务表显式存储；LangGraph checkpoint metadata 不可靠，仅作历史 fallback）
+    version: 7,
+    sql: `
+CREATE TABLE IF NOT EXISTS conversation_workspaces (
+  user_id         TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  workspace_id    TEXT NOT NULL,
+  workspace_name  TEXT,
+  workspace_dir   TEXT,
+  updated_at      INTEGER NOT NULL,
+  PRIMARY KEY (user_id, conversation_id)
+);
+`
   }
 ]
 

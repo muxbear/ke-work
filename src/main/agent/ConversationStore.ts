@@ -84,6 +84,62 @@ export class ConversationStore {
     return map
   }
 
+  /** 读取用户全部会话的工作空间绑定（conversation_workspaces 表，按用户隔离） */
+  private loadWorkspaceBindings(
+    userId: string
+  ): Map<string, ConversationWorkspace> {
+    const map = new Map<string, ConversationWorkspace>()
+    if (!this.getDb) return map
+    try {
+      const rows = this.getDb()
+        .prepare(
+          'SELECT conversation_id, workspace_id, workspace_name, workspace_dir FROM conversation_workspaces WHERE user_id = ?'
+        )
+        .all(userId) as Array<{
+        conversation_id: string
+        workspace_id: string
+        workspace_name: string | null
+        workspace_dir: string | null
+      }>
+      for (const row of rows) {
+        map.set(row.conversation_id, {
+          id: row.workspace_id,
+          name: row.workspace_name ?? '',
+          ...(row.workspace_dir ? { dir: row.workspace_dir } : {})
+        })
+      }
+    } catch (err) {
+      console.error('[ConversationStore] loadWorkspaceBindings failed:', err)
+    }
+    return map
+  }
+
+  /**
+   * 绑定会话到工作空间（业务表显式存储；LangGraph checkpoint metadata 不可靠，不能作为唯一来源）
+   * 未选择工作空间（ws 为 null）时调用将移除既有绑定（会话归默认空间）
+   */
+  bindWorkspace(
+    userId: string,
+    conversationId: string,
+    ws: { id: string; name: string; dir?: string } | null
+  ): void {
+    if (!this.getDb) return
+    const db = this.getDb()
+    if (!ws) {
+      db.prepare(
+        'DELETE FROM conversation_workspaces WHERE user_id = ? AND conversation_id = ?'
+      ).run(userId, conversationId)
+      return
+    }
+    db.prepare(
+      'INSERT INTO conversation_workspaces (user_id, conversation_id, workspace_id, workspace_name, workspace_dir, updated_at) ' +
+        'VALUES (?, ?, ?, ?, ?, ?) ' +
+        'ON CONFLICT(user_id, conversation_id) DO UPDATE SET ' +
+        'workspace_id = excluded.workspace_id, workspace_name = excluded.workspace_name, ' +
+        'workspace_dir = excluded.workspace_dir, updated_at = excluded.updated_at'
+    ).run(userId, conversationId, ws.id, ws.name, ws.dir ?? null, Date.now())
+  }
+
   /** 构造 thread_id（用户隔离单点：入参不信任，统一由 userId 合成） */
   buildThreadId(userId: string, conversationId: string): string {
     return `${THREAD_PREFIX}${userId}:${conversationId}`
@@ -145,6 +201,8 @@ export class ConversationStore {
 
     // 自定义标题（重命名）优先，未覆盖时用首条消息派生标题
     const customTitles = this.loadCustomTitles(userId)
+    // 工作空间绑定：业务表显式存储优先（可靠），checkpoint metadata 兜底（历史数据）
+    const bindings = this.loadWorkspaceBindings(userId)
 
     return uniqueTuples.map((tuple) => {
       const threadId = tuple.config.configurable?.thread_id as string
@@ -157,7 +215,7 @@ export class ConversationStore {
         title: customTitles.get(conversationId) ?? this.deriveTitle(tuple),
         createAt: created.getTime(),
         updateAt: updated.getTime(),
-        workspace: this.readWorkspace(tuple)
+        workspace: bindings.get(conversationId) ?? this.readWorkspace(tuple)
       }
     })
   }
@@ -180,6 +238,23 @@ export class ConversationStore {
     userId: string,
     conversationId: string
   ): Promise<ConversationWorkspace | null> {
+    // 业务表绑定优先（可靠）；checkpoint metadata 兜底（历史数据）
+    if (this.getDb) {
+      const row = this.getDb()
+        .prepare(
+          'SELECT workspace_id, workspace_name, workspace_dir FROM conversation_workspaces WHERE user_id = ? AND conversation_id = ?'
+        )
+        .get(userId, conversationId) as
+        | { workspace_id: string; workspace_name: string | null; workspace_dir: string | null }
+        | undefined
+      if (row) {
+        return {
+          id: row.workspace_id,
+          name: row.workspace_name ?? '',
+          ...(row.workspace_dir ? { dir: row.workspace_dir } : {})
+        }
+      }
+    }
     const checkpointer = this.getCheckpointer()
     const tuple = await checkpointer.getTuple({
       configurable: { thread_id: this.buildThreadId(userId, conversationId) }
@@ -230,13 +305,16 @@ export class ConversationStore {
       .filter((m): m is ConversationMessage => m !== null)
   }
 
-  /** 删除会话（删 checkpoint + 自定义标题记录；store 长期记忆按用户命名空间，不随会话删除） */
+  /** 删除会话（删 checkpoint + 自定义标题/工作空间绑定记录；store 长期记忆按用户命名空间，不随会话删除） */
   async deleteConversation(userId: string, conversationId: string): Promise<void> {
     const checkpointer = this.getCheckpointer()
     await checkpointer.deleteThread(this.buildThreadId(userId, conversationId))
     if (this.getDb) {
       this.getDb()
         .prepare('DELETE FROM conversation_titles WHERE user_id = ? AND conversation_id = ?')
+        .run(userId, conversationId)
+      this.getDb()
+        .prepare('DELETE FROM conversation_workspaces WHERE user_id = ? AND conversation_id = ?')
         .run(userId, conversationId)
     }
   }
