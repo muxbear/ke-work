@@ -19,6 +19,14 @@ const userStore = useUserStore()
 const agentStore = useAgentStore()
 const workspaceStore = useWorkspaceStore()
 
+// ── 当前登录用户展示 ──
+/** 显示名：用户名 → 手机号 → 兜底文案 */
+const displayName = computed(
+  () => userStore.userInfo?.username || userStore.userInfo?.mobile || 'KE-WORK用户'
+)
+/** 头像取显示名首字符 */
+const avatarInitial = computed(() => displayName.value.trim().charAt(0).toUpperCase() || 'K')
+
 // ── Sidebar state ──
 const sidebarCollapsed = ref(false)
 const spaceOpen = ref(true)
@@ -623,8 +631,8 @@ const adjustMenuDirection = (): void => {
         <!-- User bar -->
         <div class="user-bar">
           <button class="user-avatar-btn" data-usermenu-trigger="true" @click="userMenuOpen = !userMenuOpen">
-            <div class="user-avatar">KE</div>
-            <span class="user-name">KE-WORK用户</span>
+            <div class="user-avatar">{{ avatarInitial }}</div>
+            <span class="user-name">{{ displayName }}</span>
           </button>
           <button class="user-icon-btn">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -639,8 +647,8 @@ const adjustMenuDirection = (): void => {
           <div v-if="userMenuOpen" ref="userMenuRef" class="user-menu">
             <!-- User header -->
             <div class="menu-header">
-              <div class="menu-avatar">鸾</div>
-              <span class="menu-username">KE-WORK用户</span>
+              <div class="menu-avatar">{{ avatarInitial }}</div>
+              <span class="menu-username">{{ displayName }}</span>
               <button class="menu-copy-btn">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                   stroke-linecap="round">

@@ -63,12 +63,18 @@ describe('E2E 登录全流程', () => {
     await page.getByPlaceholder('请输入密码（至少6位）').fill('Secret123!')
     await page.getByRole('button', { name: '登录', exact: true }).click()
     await page.locator('.home-layout').waitFor({ state: 'visible', timeout: WAIT })
+    // 左侧栏底部应显示当前登录用户名（而非硬编码占位）
+    await page.locator('.user-name').waitFor({ state: 'visible', timeout: 15_000 })
+    expect(await page.locator('.user-name').textContent()).toBe('e2euser')
   }, 90_000)
 
   it('E2E-01b: 重启后保持登录（token 持久化）', async () => {
     await launchApp()
     // 直接进入 /home（路由守卫基于 localStorage token 放行）
     await page.locator('.home-layout').waitFor({ state: 'visible', timeout: WAIT })
+    // 重启后用户信息从 localStorage 恢复，侧栏仍显示当前用户名
+    await page.locator('.user-name').waitFor({ state: 'visible', timeout: 15_000 })
+    expect(await page.locator('.user-name').textContent()).toBe('e2euser')
   }, 90_000)
 
   it('E2E-05: 创建会话并发送消息，重启后数据持久化', async () => {
