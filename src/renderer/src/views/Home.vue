@@ -362,8 +362,15 @@ const adjustMenuDirection = (): void => {
         <circle cx="29.5" cy="19" r="1.2" fill="#0e7490" />
       </svg>
       <button class="sidebar-collapse-btn" title="展开侧栏" @click="sidebarCollapsed = false">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round">
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        >
           <rect x="3" y="3" width="18" height="18" rx="2" />
           <path d="M9 3v18" />
           <path d="M14 9l3 3-3 3" />
@@ -393,8 +400,15 @@ const adjustMenuDirection = (): void => {
             <p class="sidebar-version">v1.0.0</p>
           </div>
           <button class="sidebar-collapse-btn" title="收缩侧栏" @click="sidebarCollapsed = true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
               <rect x="3" y="3" width="18" height="18" rx="2" />
               <path d="M9 3v18" />
               <path d="M14 15l-3-3 3-3" />
@@ -405,30 +419,67 @@ const adjustMenuDirection = (): void => {
 
       <!-- Navigation -->
       <nav class="sidebar-nav">
-        <button :class="['nav-item', { 'nav-item--active': activeNav === '新建任务' }]" @click="switchNav('新建任务')">
+        <button
+          :class="['nav-item', { 'nav-item--active': activeNav === '新建任务' }]"
+          @click="switchNav('新建任务')"
+        >
           <span class="nav-icon">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round">
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
           </span>
           <span class="nav-label">新建任务</span>
         </button>
-        <button v-for="item in navItems" :key="item.label"
-          :class="['nav-item', { 'nav-item--active': activeNav === item.label }]" @click="switchNav(item.label)">
+        <button
+          v-for="item in navItems"
+          :key="item.label"
+          :class="['nav-item', { 'nav-item--active': activeNav === item.label }]"
+          @click="switchNav(item.label)"
+        >
           <span class="nav-icon">
-            <svg v-if="item.icon === 'bot'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="2">
+            <svg
+              v-if="item.icon === 'bot'"
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <rect x="3" y="3" width="18" height="14" rx="3" />
               <path d="M8 21h8M12 17v4" />
             </svg>
-            <svg v-else-if="item.icon === 'folder'" width="15" height="15" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            <svg
+              v-else-if="item.icon === 'folder'"
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+              />
             </svg>
-            <svg v-else-if="item.icon === 'cpu'" width="15" height="15" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2">
+            <svg
+              v-else-if="item.icon === 'cpu'"
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <rect x="4" y="4" width="16" height="16" rx="2" />
               <rect x="9" y="9" width="6" height="6" />
               <line x1="9" y1="1" x2="9" y2="4" />
@@ -440,14 +491,29 @@ const adjustMenuDirection = (): void => {
               <line x1="1" y1="9" x2="4" y2="9" />
               <line x1="1" y1="14" x2="4" y2="14" />
             </svg>
-            <svg v-else-if="item.icon === 'workflow'" width="15" height="15" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2">
+            <svg
+              v-else-if="item.icon === 'workflow'"
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <rect x="2" y="3" width="6" height="6" rx="1" />
               <rect x="9" y="2" width="6" height="8" rx="1" />
               <rect x="16" y="3" width="6" height="6" rx="1" />
               <path d="M5 9v4a2 2 0 0 0 2 2h3M12 6v2M19 9v4a2 2 0 0 1-2 2h-2" />
             </svg>
-            <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              v-else
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <circle cx="12" cy="12" r="1" />
               <circle cx="19" cy="12" r="1" />
               <circle cx="5" cy="12" r="1" />
@@ -463,8 +529,16 @@ const adjustMenuDirection = (): void => {
       <!-- Spaces -->
       <div class="sidebar-spaces">
         <button class="spaces-toggle" @click="spaceOpen = !spaceOpen">
-          <svg :class="{ 'rotate-n90': !spaceOpen }" width="11" height="11" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <svg
+            :class="{ 'rotate-n90': !spaceOpen }"
+            width="11"
+            height="11"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
             <polyline points="6 9 12 15 18 9" />
           </svg>
           <span>空间 ({{ conversationGroups.length }})</span>
@@ -472,17 +546,37 @@ const adjustMenuDirection = (): void => {
         <Transition name="space-collapse">
           <div v-show="spaceOpen" class="spaces-list">
             <div v-for="group in conversationGroups" :key="group.key" class="space-group">
-              <div class="space-header"
+              <div
+                class="space-header"
                 :class="{
                   'space-header--active': group.ws.id === workspaceStore.currentId,
                   'space-header--menu-open': activeSpaceMenu === group.key
-                }">
-                <svg v-if="group.ws.source !== 'default'" width="12" height="12" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                }"
+              >
+                <svg
+                  v-if="group.ws.source !== 'default'"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <path
+                    d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                  />
                 </svg>
-                <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2" stroke-linecap="round">
+                <svg
+                  v-else
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
                   <circle cx="18" cy="5" r="3" />
                   <circle cx="6" cy="12" r="3" />
                   <circle cx="18" cy="19" r="3" />
@@ -492,11 +586,25 @@ const adjustMenuDirection = (): void => {
                 <span>{{ group.ws.name }}</span>
                 <div class="space-header-right">
                   <div class="space-header-actions">
-                    <button class="space-header-btn space-header-menu" type="button" data-space-menu-trigger
-                      aria-label="更多" title="更多" @click.stop="toggleSpaceMenu(group.key)"
-                      @mouseenter="openHoverSpaceMenu(group.key)" @mouseleave="scheduleSpaceMenuClose">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round">
+                    <button
+                      class="space-header-btn space-header-menu"
+                      type="button"
+                      data-space-menu-trigger
+                      aria-label="更多"
+                      title="更多"
+                      @click.stop="toggleSpaceMenu(group.key)"
+                      @mouseenter="openHoverSpaceMenu(group.key)"
+                      @mouseleave="scheduleSpaceMenuClose"
+                    >
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                      >
                         <circle cx="12" cy="5" r="1" />
                         <circle cx="12" cy="12" r="1" />
                         <circle cx="12" cy="19" r="1" />
@@ -504,42 +612,93 @@ const adjustMenuDirection = (): void => {
                     </button>
                     <!-- 菜单切换（hover 快速掠过多个按钮）时旧菜单立即移除，仅保留入场动画，
                          避免 Transition leave+enter 并存导致多个菜单叠放 -->
-                    <div v-if="activeSpaceMenu === group.key" class="space-menu" @mouseenter="spaceMenuEnter"
-                      @mouseleave="closeHoverSpaceMenu">
-                        <button class="space-menu-item" type="button"
-                          @click.stop="openWorkspaceDir(group.ws)">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round">
-                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                          </svg>
-                          打开文件夹
-                        </button>
-                        <!-- 默认空间为机器级共享记录，不可从列表中删除 -->
-                        <button v-if="group.ws.source !== 'default'" class="space-menu-item space-menu-item--danger" type="button"
-                          @click.stop="deleteWorkspaceItem(group.ws.id)">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round">
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                          </svg>
-                          从列表中删除
-                        </button>
-                      </div>
-                    <button class="space-header-btn space-header-add" type="button" title="添加子项"
-                      @click.stop="handleAddSpaceItem(group.ws.name)">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round">
+                    <div
+                      v-if="activeSpaceMenu === group.key"
+                      class="space-menu"
+                      @mouseenter="spaceMenuEnter"
+                      @mouseleave="closeHoverSpaceMenu"
+                    >
+                      <button
+                        class="space-menu-item"
+                        type="button"
+                        @click.stop="openWorkspaceDir(group.ws)"
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                        >
+                          <path
+                            d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                          />
+                        </svg>
+                        打开文件夹
+                      </button>
+                      <!-- 默认空间为机器级共享记录，不可从列表中删除 -->
+                      <button
+                        v-if="group.ws.source !== 'default'"
+                        class="space-menu-item space-menu-item--danger"
+                        type="button"
+                        @click.stop="deleteWorkspaceItem(group.ws.id)"
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                        >
+                          <polyline points="3 6 5 6 21 6" />
+                          <path
+                            d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                          />
+                        </svg>
+                        从列表中删除
+                      </button>
+                    </div>
+                    <button
+                      class="space-header-btn space-header-add"
+                      type="button"
+                      title="添加子项"
+                      @click.stop="handleAddSpaceItem(group.ws.name)"
+                    >
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                      >
                         <line x1="12" y1="5" x2="12" y2="19" />
                         <line x1="5" y1="12" x2="19" y2="12" />
                       </svg>
                     </button>
                   </div>
-                  <button class="space-header-btn space-header-collapse" type="button"
+                  <button
+                    class="space-header-btn space-header-collapse"
+                    type="button"
                     :class="{ 'space-header-collapse--collapsed': collapsedSpaces[group.key] }"
-                    :aria-expanded="!collapsedSpaces[group.key]" title="折叠 / 展开"
-                    @click.stop="toggleSpaceCollapse(group.key)">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                      stroke-linecap="round">
+                    :aria-expanded="!collapsedSpaces[group.key]"
+                    title="折叠 / 展开"
+                    @click.stop="toggleSpaceCollapse(group.key)"
+                  >
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    >
                       <polyline points="6 9 12 15 18 9" />
                     </svg>
                   </button>
@@ -547,7 +706,9 @@ const adjustMenuDirection = (): void => {
               </div>
               <Transition name="space-collapse">
                 <div v-show="!collapsedSpaces[group.key]" class="space-children">
-                  <div v-for="chat in group.chats" :key="chat.id"
+                  <div
+                    v-for="chat in group.chats"
+                    :key="chat.id"
                     :class="[
                       'space-chat',
                       {
@@ -555,65 +716,140 @@ const adjustMenuDirection = (): void => {
                         'space-chat--menu-open': activeChatMenu === chat.id
                       }
                     ]"
-                    @click="openConversation(chat.id)">
+                    @click="openConversation(chat.id)"
+                  >
                     <div class="space-chat-main">
                       <p class="space-chat-title">{{ chat.title }}</p>
                     </div>
                     <div class="space-chat-actions">
                       <div class="chat-menu-wrapper">
-                        <button class="space-chat-action-btn" data-chat-menu-trigger title="更多"
-                          @click.stop="toggleChatMenu(chat.id)" @mouseenter="openHoverChatMenu(chat.id)"
-                          @mouseleave="scheduleChatMenuClose">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round">
+                        <button
+                          class="space-chat-action-btn"
+                          data-chat-menu-trigger
+                          title="更多"
+                          @click.stop="toggleChatMenu(chat.id)"
+                          @mouseenter="openHoverChatMenu(chat.id)"
+                          @mouseleave="scheduleChatMenuClose"
+                        >
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                          >
                             <circle cx="12" cy="5" r="1" />
                             <circle cx="12" cy="12" r="1" />
                             <circle cx="12" cy="19" r="1" />
                           </svg>
                         </button>
-                        <div v-if="activeChatMenu === chat.id" class="chat-menu" @mouseenter="chatMenuEnter"
-                          @mouseleave="closeHoverChatMenu">
-                            <button class="chat-menu-item" type="button" @click.stop="openChatWorkspaceDir(chat)">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2" stroke-linecap="round">
-                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                              </svg>
-                              打开文件夹
-                            </button>
-                            <button class="chat-menu-item" type="button" @click.stop="openRename(chat)">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2" stroke-linecap="round">
-                                <polyline points="1 4 1 10 7 10" />
-                                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-                              </svg>
-                              重命名
-                            </button>
-                            <button class="chat-menu-item chat-menu-item--danger" type="button"
-                              @click.stop="deleteChat(chat.id)">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2" stroke-linecap="round">
-                                <polyline points="3 6 5 6 21 6" />
-                                <path
-                                  d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                              </svg>
-                              删除任务
-                            </button>
+                        <div
+                          v-if="activeChatMenu === chat.id"
+                          class="chat-menu"
+                          @mouseenter="chatMenuEnter"
+                          @mouseleave="closeHoverChatMenu"
+                        >
+                          <button
+                            class="chat-menu-item"
+                            type="button"
+                            @click.stop="openChatWorkspaceDir(chat)"
+                          >
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                            >
+                              <path
+                                d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                              />
+                            </svg>
+                            打开文件夹
+                          </button>
+                          <button
+                            class="chat-menu-item"
+                            type="button"
+                            @click.stop="openRename(chat)"
+                          >
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                            >
+                              <polyline points="1 4 1 10 7 10" />
+                              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                            </svg>
+                            重命名
+                          </button>
+                          <button
+                            class="chat-menu-item chat-menu-item--danger"
+                            type="button"
+                            @click.stop="deleteChat(chat.id)"
+                          >
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                            >
+                              <polyline points="3 6 5 6 21 6" />
+                              <path
+                                d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                              />
+                            </svg>
+                            删除任务
+                          </button>
                         </div>
                       </div>
-                      <button class="space-chat-action-btn" title="归档" @click.stop="handleArchiveChat(chat.id)">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                          stroke-width="2" stroke-linecap="round">
+                      <button
+                        class="space-chat-action-btn"
+                        title="归档"
+                        @click.stop="handleArchiveChat(chat.id)"
+                      >
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                        >
                           <polyline points="21 8 21 21 3 21 3 8" />
                           <rect x="1" y="3" width="22" height="5" />
                           <line x1="10" y1="12" x2="14" y2="12" />
                         </svg>
                       </button>
-                      <button class="space-chat-action-btn" title="置顶" @click.stop="handlePinChat(chat.id)">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                          stroke-width="2" stroke-linecap="round">
+                      <button
+                        class="space-chat-action-btn"
+                        title="置顶"
+                        @click.stop="handlePinChat(chat.id)"
+                      >
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                        >
                           <line x1="12" y1="17" x2="12" y2="22" />
                           <path
-                            d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
+                            d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"
+                          />
                         </svg>
                       </button>
                     </div>
@@ -630,12 +866,23 @@ const adjustMenuDirection = (): void => {
       <div class="sidebar-bottom">
         <!-- User bar -->
         <div class="user-bar">
-          <button class="user-avatar-btn" data-usermenu-trigger="true" @click="userMenuOpen = !userMenuOpen">
+          <button
+            class="user-avatar-btn"
+            data-usermenu-trigger="true"
+            @click="userMenuOpen = !userMenuOpen"
+          >
             <div class="user-avatar">{{ avatarInitial }}</div>
             <span class="user-name">{{ displayName }}</span>
           </button>
           <button class="user-icon-btn">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
@@ -650,8 +897,15 @@ const adjustMenuDirection = (): void => {
               <div class="menu-avatar">{{ avatarInitial }}</div>
               <span class="menu-username">{{ displayName }}</span>
               <button class="menu-copy-btn">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
                   <rect x="9" y="9" width="13" height="13" rx="2" />
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                 </svg>
@@ -660,23 +914,46 @@ const adjustMenuDirection = (): void => {
             <!-- Menu items -->
             <div class="menu-section">
               <button class="menu-item" @click="openSettings">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
                   <circle cx="12" cy="12" r="3" />
                   <path
-                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+                  />
                 </svg>
                 <span>设置</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
               </button>
               <!-- Theme toggle -->
               <div class="menu-item-row">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
                   <circle cx="12" cy="12" r="5" />
                   <path
-                    d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                    d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
+                  />
                 </svg>
                 <span>外观</span>
                 <div class="theme-toggle">
@@ -685,34 +962,69 @@ const adjustMenuDirection = (): void => {
                 </div>
               </div>
               <button class="menu-item">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
                   <circle cx="12" cy="12" r="10" />
                   <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
                   <path d="M12 17h.01" />
                 </svg>
                 <span>帮助与反馈</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
               </button>
               <button class="menu-item">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                   <polyline points="17 8 12 3 7 8" />
                   <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
                 <span>检查更新</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
               </button>
             </div>
             <!-- Logout -->
             <button class="menu-logout" :disabled="logoutPending" @click="openLogoutConfirm">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              >
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                 <polyline points="16 17 21 12 16 7" />
                 <line x1="21" y1="12" x2="9" y2="12" />
@@ -749,22 +1061,39 @@ const adjustMenuDirection = (): void => {
           <div class="rename-header">
             <span>重命名会话</span>
             <button class="rename-close" aria-label="关闭" @click="renameTarget = null">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              >
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
           </div>
           <div class="rename-body">
-            <input v-model="renameTitle" class="rename-input" maxlength="50" placeholder="输入新的会话标题"
-              @keydown.enter.prevent="confirmRename" />
+            <input
+              v-model="renameTitle"
+              class="rename-input"
+              maxlength="50"
+              placeholder="输入新的会话标题"
+              @keydown.enter.prevent="confirmRename"
+            />
             <p v-if="renameError" class="rename-error">{{ renameError }}</p>
           </div>
           <div class="rename-footer">
             <button class="rename-btn rename-btn--cancel" @click="renameTarget = null">取消</button>
-            <button class="rename-btn rename-btn--confirm" :disabled="renaming || !renameTitle.trim()"
-              @click="confirmRename">保存</button>
+            <button
+              class="rename-btn rename-btn--confirm"
+              :disabled="renaming || !renameTitle.trim()"
+              @click="confirmRename"
+            >
+              保存
+            </button>
           </div>
         </div>
       </div>
@@ -774,7 +1103,7 @@ const adjustMenuDirection = (): void => {
     <main class="content-area">
       <Transition name="page-fade" mode="out-in">
         <!-- ── New Task Page ── -->
-        <NewTaskPage v-if="activeNav === '新建任务'" key="newtask" />
+        <NewTaskPage v-if="activeNav === '新建任务'" key="newtask" @navigate="activeNav = $event" />
         <!-- ── Page components ── -->
         <AssistantPage v-else-if="activeNav === '助理'" key="assistant" />
         <ProjectPage v-else-if="activeNav === '项目'" key="project" />
@@ -782,8 +1111,15 @@ const adjustMenuDirection = (): void => {
         <AutomationPage v-else-if="activeNav === '自动化'" key="automation" />
         <div v-else key="placeholder" class="placeholder-page">
           <div class="placeholder-icon">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"
-              stroke-linecap="round">
+            <svg
+              width="48"
+              height="48"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1"
+              stroke-linecap="round"
+            >
               <circle cx="12" cy="12" r="10" />
               <path d="M8 14s1.5 2 4 2 4-2 4-2" />
               <line x1="9" y1="9" x2="9.01" y2="9" />
@@ -1622,17 +1958,17 @@ const adjustMenuDirection = (): void => {
   background: rgba(8, 145, 178, 0.04);
 }
 
-.menu-item>svg:first-child {
+.menu-item > svg:first-child {
   color: #6b7f95;
   flex-shrink: 0;
 }
 
-.menu-item>span {
+.menu-item > span {
   flex: 1;
   font-weight: 500;
 }
 
-.menu-item>svg:last-child {
+.menu-item > svg:last-child {
   color: #d1d5db;
   flex-shrink: 0;
 }
@@ -1645,12 +1981,12 @@ const adjustMenuDirection = (): void => {
   font-size: 13px;
 }
 
-.menu-item-row>svg:first-child {
+.menu-item-row > svg:first-child {
   color: #6b7f95;
   flex-shrink: 0;
 }
 
-.menu-item-row>span {
+.menu-item-row > span {
   flex: 1;
   font-weight: 500;
   color: #1a2332;
@@ -1760,7 +2096,6 @@ const adjustMenuDirection = (): void => {
   background: #ffffff;
   position: relative;
 }
-
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Placeholder Page
@@ -1884,7 +2219,9 @@ const adjustMenuDirection = (): void => {
   font-family: inherit;
   color: #1a2332;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .rename-input:focus {
@@ -1914,7 +2251,9 @@ const adjustMenuDirection = (): void => {
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
-  transition: opacity 0.15s ease, background-color 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .rename-btn--cancel {
@@ -1968,5 +2307,4 @@ const adjustMenuDirection = (): void => {
     display: none;
   }
 }
-
 </style>

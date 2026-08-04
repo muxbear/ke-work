@@ -4,9 +4,13 @@ import { useAgentStore } from '@store/agent'
 import { useWorkspaceStore } from '@store/workspace'
 import MessageContent from '@components/MessageContent.vue'
 import ChatSidePanel from '@components/ChatSidePanel.vue'
+import PlusMenu from '@components/PlusMenu.vue'
+import { useCatalogStore, type Mode } from '@store/catalog'
 
 const agentStore = useAgentStore()
 const workspaceStore = useWorkspaceStore()
+const catalog = useCatalogStore()
+const emit = defineEmits<{ navigate: [tab: '专家·技能·连接器'] }>()
 
 // 通过本地 computed 包装 agentStore，建立正确的 Vue 响应式依赖链
 const currentMessages = computed(() => agentStore.currentMessages)
@@ -21,6 +25,67 @@ const modelOpen = ref(false)
 const showInputPlusMenu = ref(false)
 const chipsScrollRef = ref<HTMLElement | null>(null)
 const bottomRef = ref<HTMLElement | null>(null)
+
+// ── 「+」菜单选中状态展示 ──
+const MODE_LABELS: Record<Mode, string> = {
+  default: '默认',
+  local: '本地文件',
+  knowledge: '知识库'
+}
+
+interface SelectionChip {
+  key: string
+  label: string
+  kind: 'mode' | 'skill' | 'file'
+  id?: number
+  path?: string
+}
+
+/** 输入卡左上角 chips：模式(非默认) + 已选技能 + 已挂载文件（按选择顺序） */
+const selectionChips = computed<SelectionChip[]>(() => {
+  const chips: SelectionChip[] = []
+  if (catalog.mode !== 'default') {
+    chips.push({ key: 'mode', label: `模式 · ${MODE_LABELS[catalog.mode]}`, kind: 'mode' })
+  }
+  for (const s of catalog.selectedSkills) {
+    chips.push({ key: `skill-${s.id}`, label: s.name, kind: 'skill', id: s.id })
+  }
+  for (const f of catalog.attachedFiles) {
+    chips.push({ key: `file-${f.path}`, label: f.name, kind: 'file', path: f.path })
+  }
+  return chips
+})
+
+/** 点击 chip 移除对应选择（模式回默认） */
+const removeChip = (chip: SelectionChip): void => {
+  if (chip.kind === 'mode') catalog.setMode('default')
+  else if (chip.kind === 'skill' && chip.id !== undefined) catalog.toggleSkill(chip.id)
+  else if (chip.kind === 'file' && chip.path) catalog.removeFile(chip.path)
+}
+
+/** 移除专家选择（提示词由 watcher 从输入框移除） */
+const removeExpert = (): void => {
+  catalog.clearExpert()
+}
+
+/** 专家提示词 ↔ textarea 同步（选中插入，移除时剔除原文） */
+watch(
+  () => catalog.selectedExpertPrompt,
+  (prompt, prev) => {
+    if (prompt && !taskInput.value.includes(prompt)) {
+      taskInput.value = taskInput.value ? `${prompt}\n${taskInput.value}` : prompt
+    } else if (!prompt && prev) {
+      taskInput.value = taskInput.value.split(prev).join('').replace(/^\n+/, '')
+    }
+  },
+  { immediate: true }
+)
+
+/** 菜单内导航 → Home 切换页面（具体标签页由 catalog store 的 pageTab 决定） */
+const onPlusNavigate = (): void => {
+  showInputPlusMenu.value = false
+  emit('navigate', '专家·技能·连接器')
+}
 
 // ── Workspace selector 状态 ──
 const wsMenuOpen = ref(false)
@@ -126,7 +191,10 @@ const formatTime = (ts: number): string => {
 // ── 历史提问下拉 ──
 const historyMenuOpen = ref(false)
 const historyQuestions = computed(() =>
-  messages.value.filter((m) => m.role === 'user').slice().reverse()
+  messages.value
+    .filter((m) => m.role === 'user')
+    .slice()
+    .reverse()
 )
 
 // ── 对话内搜索 ──
@@ -134,6 +202,12 @@ const searchOpen = ref(false)
 const searchKeyword = ref('')
 const searchIndex = ref(0)
 const suppressAutoScroll = ref(false)
+
+/** 关闭搜索并清空关键词（收敛为方法，避免模板内多语句表达式） */
+const closeSearch = (): void => {
+  searchOpen.value = false
+  searchKeyword.value = ''
+}
 
 const searchMatches = computed(() => {
   const kw = searchKeyword.value.trim().toLowerCase()
@@ -248,13 +322,11 @@ const sendMessage = (): void => {
   if (!taskInput.value.trim()) return
   const content = taskInput.value.trim()
   taskInput.value = ''
-  agentStore
-    .sendMessage(content, { model: model.value })
-    .catch((err: unknown) => {
-      console.error('[NewTaskPage] sendMessage failed:', err)
-      // 失败时恢复输入内容，避免用户输入丢失且无反馈
-      taskInput.value = content
-    })
+  agentStore.sendMessage(content, { model: model.value }).catch((err: unknown) => {
+    console.error('[NewTaskPage] sendMessage failed:', err)
+    // 失败时恢复输入内容，避免用户输入丢失且无反馈
+    taskInput.value = content
+  })
 }
 
 // ── Workspace selector handlers ──
@@ -343,8 +415,12 @@ watch(
 
       <!-- Category pills -->
       <div class="category-pills">
-        <button v-for="cat in categories" :key="cat.key"
-          :class="['category-pill', { 'category-pill--active': category === cat.key }]" @click="category = cat.key">
+        <button
+          v-for="cat in categories"
+          :key="cat.key"
+          :class="['category-pill', { 'category-pill--active': category === cat.key }]"
+          @click="category = cat.key"
+        >
           <span>{{ cat.icon }}</span>
           {{ cat.label }}
         </button>
@@ -353,36 +429,78 @@ watch(
       <!-- Quick chips + mascot -->
       <div class="chips-row">
         <button class="chips-scroll-btn chips-scroll-btn--left" @click="scrollChips('left')">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
         <div ref="chipsScrollRef" class="chips-scroll">
           <button v-for="chip in quickChips" :key="chip.label" class="quick-chip">
             <span class="chip-icon">
-              <svg v-if="chip.icon === 'doc'" width="13" height="13" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2">
+              <svg
+                v-if="chip.icon === 'doc'"
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                 <polyline points="14 2 14 8 20 8" />
               </svg>
-              <svg v-else-if="chip.icon === 'chart'" width="13" height="13" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2">
+              <svg
+                v-else-if="chip.icon === 'chart'"
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <line x1="18" y1="20" x2="18" y2="10" />
                 <line x1="12" y1="20" x2="12" y2="4" />
                 <line x1="6" y1="20" x2="6" y2="14" />
               </svg>
-              <svg v-else-if="chip.icon === 'research'" width="13" height="13" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2">
+              <svg
+                v-else-if="chip.icon === 'research'"
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
                 <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
               </svg>
-              <svg v-else-if="chip.icon === 'video'" width="13" height="13" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2">
+              <svg
+                v-else-if="chip.icon === 'video'"
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <polygon points="23 7 16 12 23 17 23 7" />
                 <rect x="1" y="5" width="15" height="14" rx="2" />
               </svg>
-              <svg v-else-if="chip.icon === 'slides'" width="13" height="13" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2">
+              <svg
+                v-else-if="chip.icon === 'slides'"
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <rect x="2" y="3" width="20" height="14" rx="2" />
                 <line x1="8" y1="21" x2="16" y2="21" />
                 <line x1="12" y1="17" x2="12" y2="21" />
@@ -392,7 +510,14 @@ watch(
           </button>
         </div>
         <button class="chips-scroll-btn chips-scroll-btn--right" @click="scrollChips('right')">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
             <polyline points="9 6 15 12 9 18" />
           </svg>
         </button>
@@ -426,13 +551,49 @@ watch(
           <circle cx="54" cy="29" r="4" fill="#1e293b" />
           <circle cx="35.5" cy="27.5" r="1.5" fill="white" />
           <circle cx="55.5" cy="27.5" r="1.5" fill="white" />
-          <rect x="27" y="23" width="14" height="12" rx="6" fill="none" stroke="url(#rmg2)" stroke-width="1.5" />
-          <rect x="47" y="23" width="14" height="12" rx="6" fill="none" stroke="url(#rmg2)" stroke-width="1.5" />
+          <rect
+            x="27"
+            y="23"
+            width="14"
+            height="12"
+            rx="6"
+            fill="none"
+            stroke="url(#rmg2)"
+            stroke-width="1.5"
+          />
+          <rect
+            x="47"
+            y="23"
+            width="14"
+            height="12"
+            rx="6"
+            fill="none"
+            stroke="url(#rmg2)"
+            stroke-width="1.5"
+          />
           <ellipse cx="44" cy="37" rx="3" ry="1.5" fill="#94a3b8" />
-          <path d="M40 40 Q44 43 48 40" stroke="#94a3b8" stroke-width="1.2" stroke-linecap="round" fill="none" />
-          <path d="M16 27 Q14 20 20 16" stroke="#0891b2" stroke-width="3" stroke-linecap="round" fill="none" />
+          <path
+            d="M40 40 Q44 43 48 40"
+            stroke="#94a3b8"
+            stroke-width="1.2"
+            stroke-linecap="round"
+            fill="none"
+          />
+          <path
+            d="M16 27 Q14 20 20 16"
+            stroke="#0891b2"
+            stroke-width="3"
+            stroke-linecap="round"
+            fill="none"
+          />
           <rect x="12" y="26" width="8" height="10" rx="4" fill="url(#rmg2)" />
-          <path d="M72 27 Q74 20 68 16" stroke="#0891b2" stroke-width="3" stroke-linecap="round" fill="none" />
+          <path
+            d="M72 27 Q74 20 68 16"
+            stroke="#0891b2"
+            stroke-width="3"
+            stroke-linecap="round"
+            fill="none"
+          />
           <rect x="68" y="26" width="8" height="10" rx="4" fill="url(#rmg2)" />
           <rect x="10" y="48" width="14" height="18" rx="7" fill="url(#rmg1)" />
           <rect x="64" y="48" width="14" height="18" rx="7" fill="url(#rmg1)" />
@@ -443,15 +604,70 @@ watch(
 
       <!-- Input card -->
       <div class="input-card">
-        <textarea v-model="taskInput" class="task-textarea" placeholder="今天帮你做些什么？  @ 引用对话文件，/ 调用技能与指令" rows="3"
-          @keydown.enter.exact.prevent="sendMessage"></textarea>
+        <textarea
+          v-model="taskInput"
+          class="task-textarea"
+          placeholder="今天帮你做些什么？  @ 引用对话文件，/ 调用技能与指令"
+          rows="3"
+          @keydown.enter.exact.prevent="sendMessage"
+        ></textarea>
+        <div v-if="selectionChips.length" class="selection-chips">
+          <span
+            v-for="chip in selectionChips"
+            :key="chip.key"
+            class="selection-chip"
+            @click="removeChip(chip)"
+          >
+            <svg
+              class="selection-chip-del"
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+            <span class="selection-chip-name">{{ chip.label }}</span>
+          </span>
+        </div>
         <div class="input-toolbar">
-          <button class="toolbar-btn" data-plus-menu-trigger @click="showInputPlusMenu = !showInputPlusMenu">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <button
+            class="toolbar-btn"
+            data-plus-menu-trigger
+            @click="showInputPlusMenu = !showInputPlusMenu"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
           </button>
+          <div v-if="catalog.selectedExpert" class="expert-chip" @click="removeExpert">
+            <span class="expert-chip-name">{{ catalog.selectedExpert.name }}</span>
+            <svg
+              class="expert-chip-del"
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </div>
           <button class="toolbar-btn">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
               <path d="M9 2L13 7H5L9 2Z" fill="#0891b2" opacity="0.7" />
@@ -464,20 +680,45 @@ watch(
           <!-- Model selector -->
           <div class="model-selector">
             <button class="model-btn" @click="modelOpen = !modelOpen">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
               </svg>
               {{ model }}
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <polyline points="6 9 12 15 18 9" />
               </svg>
             </button>
             <Transition name="dropdown">
               <div v-if="modelOpen" class="model-dropdown">
-                <button v-for="opt in modelOptions" :key="opt"
-                  :class="['model-option', { 'model-option--active': model === opt }]" @click="selectModel(opt)">
-                  <svg v-if="model === opt" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="3">
+                <button
+                  v-for="opt in modelOptions"
+                  :key="opt"
+                  :class="['model-option', { 'model-option--active': model === opt }]"
+                  @click="selectModel(opt)"
+                >
+                  <svg
+                    v-if="model === opt"
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                  >
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                   <span v-else class="model-option-gap"></span>
@@ -487,7 +728,14 @@ watch(
             </Transition>
           </div>
           <button class="toolbar-btn">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
               <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
               <line x1="12" y1="19" x2="12" y2="23" />
@@ -495,9 +743,20 @@ watch(
             </svg>
           </button>
           <!-- 发送/停止按钮 -->
-          <button v-if="!isStreaming" class="send-btn" :class="{ 'send-btn--active': taskInput.trim() }"
-            @click="sendMessage">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <button
+            v-if="!isStreaming"
+            class="send-btn"
+            :class="{ 'send-btn--active': taskInput.trim() }"
+            @click="sendMessage"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+            >
               <line x1="22" y1="2" x2="11" y2="13" />
               <polygon points="22 2 15 22 11 13 2 9 22 2" />
             </svg>
@@ -509,76 +768,42 @@ watch(
           </button>
           <!-- Plus Menu -->
           <Transition name="plus-menu-slide">
-            <div v-if="showInputPlusMenu" class="plus-menu">
-              <button class="plus-menu-item" @click="showInputPlusMenu = false">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                </svg>
-                <span>添加文件</span>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  class="plus-menu-chevron">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </button>
-              <button class="plus-menu-item" @click="showInputPlusMenu = false">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                </svg>
-                <span>模式</span>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  class="plus-menu-chevron">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </button>
-              <button class="plus-menu-item" @click="showInputPlusMenu = false">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polygon
-                    points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-                <span>专家</span>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  class="plus-menu-chevron">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </button>
-              <button class="plus-menu-item" @click="showInputPlusMenu = false">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="3" />
-                  <path
-                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                </svg>
-                <span>技能</span>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  class="plus-menu-chevron">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </button>
-              <button class="plus-menu-item" @click="showInputPlusMenu = false">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="18" cy="5" r="3" />
-                  <circle cx="6" cy="12" r="3" />
-                  <circle cx="18" cy="19" r="3" />
-                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-                </svg>
-                <span>连接器</span>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  class="plus-menu-chevron">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </button>
-            </div>
+            <PlusMenu
+              v-if="showInputPlusMenu"
+              @close="showInputPlusMenu = false"
+              @navigate="onPlusNavigate"
+            />
           </Transition>
         </div>
 
         <div class="input-footer">
           <div class="workspace-selector">
-            <button class="footer-action" data-workspace-menu-trigger @click="wsMenuOpen = !wsMenuOpen">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            <button
+              class="footer-action"
+              data-workspace-menu-trigger
+              @click="wsMenuOpen = !wsMenuOpen"
+            >
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                />
               </svg>
               {{ workspaceStore.currentWorkspace?.name ?? '选择工作空间' }}
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg
+                width="9"
+                height="9"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <polyline points="6 9 12 15 18 9" />
               </svg>
             </button>
@@ -586,35 +811,79 @@ watch(
               <div v-if="wsMenuOpen" class="workspace-menu" @click.stop>
                 <!-- ① 搜索工作空间 -->
                 <div class="ws-search">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round">
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  >
                     <circle cx="11" cy="11" r="8" />
                     <path d="m21 21-4.3-4.3" />
                   </svg>
-                  <input v-model="workspaceStore.query" type="text" placeholder="搜索工作空间" class="ws-search-input" />
+                  <input
+                    v-model="workspaceStore.query"
+                    type="text"
+                    placeholder="搜索工作空间"
+                    class="ws-search-input"
+                  />
                 </div>
                 <!-- ② 已创建工作空间列表 -->
                 <div class="ws-list">
-                  <button v-for="ws in workspaceStore.filteredWorkspaces" :key="ws.id" class="ws-item"
-                    @click="pickWorkspace(ws)">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                      class="ws-item-icon">
-                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                  <button
+                    v-for="ws in workspaceStore.filteredWorkspaces"
+                    :key="ws.id"
+                    class="ws-item"
+                    @click="pickWorkspace(ws)"
+                  >
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      class="ws-item-icon"
+                    >
+                      <path
+                        d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                      />
                     </svg>
                     <span class="ws-item-name">{{ ws.name }}</span>
-                    <svg v-if="ws.id === workspaceStore.currentId" width="11" height="11" viewBox="0 0 24 24" fill="none"
-                      stroke="currentColor" stroke-width="3" class="ws-item-check">
+                    <svg
+                      v-if="ws.id === workspaceStore.currentId"
+                      width="11"
+                      height="11"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="3"
+                      class="ws-item-check"
+                    >
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   </button>
-                  <p v-if="workspaceStore.filteredWorkspaces.length === 0" class="ws-empty">无匹配的工作空间</p>
+                  <p v-if="workspaceStore.filteredWorkspaces.length === 0" class="ws-empty">
+                    无匹配的工作空间
+                  </p>
                 </div>
                 <div class="ws-divider"></div>
                 <!-- ③ 新建工作空间 -->
                 <button class="ws-item" @click="openCreateModal">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    class="ws-item-icon">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    class="ws-item-icon"
+                  >
+                    <path
+                      d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                    />
                     <line x1="12" y1="11" x2="12" y2="17" />
                     <line x1="9" y1="14" x2="15" y2="14" />
                   </svg>
@@ -622,18 +891,36 @@ watch(
                 </button>
                 <!-- ④ 打开本地文件夹 -->
                 <button class="ws-item" @click="pickExternal">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    class="ws-item-icon">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    class="ws-item-icon"
+                  >
+                    <path
+                      d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                    />
                     <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
                   </svg>
                   <span class="ws-item-name">打开本地文件夹</span>
                 </button>
                 <!-- ⑤ 使用默认工作空间 -->
                 <button class="ws-item" @click="pickDefault">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    class="ws-item-icon">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    class="ws-item-icon"
+                  >
+                    <polygon
+                      points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                    />
                   </svg>
                   <span class="ws-item-name">默认工作空间</span>
                 </button>
@@ -641,12 +928,26 @@ watch(
             </Transition>
           </div>
           <button class="footer-action">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <rect x="3" y="11" width="18" height="11" rx="2" />
               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
             </svg>
             默认权限
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              width="9"
+              height="9"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <polyline points="6 9 12 15 18 9" />
             </svg>
           </button>
@@ -660,8 +961,15 @@ watch(
             <div class="modal-header">
               <span>新建工作空间</span>
               <button class="modal-close" aria-label="关闭" @click="showCreateModal = false">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
                   <line x1="18" y1="6" x2="6" y2="18" />
                   <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
@@ -669,15 +977,28 @@ watch(
             </div>
             <div class="modal-body">
               <label class="modal-label" for="ws-create-name">工作空间名称</label>
-              <input id="ws-create-name" v-model="createName" class="modal-input" maxlength="50"
-                placeholder="将创建于 ~/KeWork/ 目录下" @keydown.enter.prevent="confirmCreate" />
+              <input
+                id="ws-create-name"
+                v-model="createName"
+                class="modal-input"
+                maxlength="50"
+                placeholder="将创建于 ~/KeWork/ 目录下"
+                @keydown.enter.prevent="confirmCreate"
+              />
               <p v-if="createError" class="modal-error">{{ createError }}</p>
               <p class="modal-hint">将在系统家目录的 KeWork/ 下创建同名文件夹</p>
             </div>
             <div class="modal-footer">
-              <button class="modal-btn modal-btn--cancel" @click="showCreateModal = false">取消</button>
-              <button class="modal-btn modal-btn--confirm" :disabled="creating || !createName.trim()"
-                @click="confirmCreate">创建</button>
+              <button class="modal-btn modal-btn--cancel" @click="showCreateModal = false">
+                取消
+              </button>
+              <button
+                class="modal-btn modal-btn--confirm"
+                :disabled="creating || !createName.trim()"
+                @click="confirmCreate"
+              >
+                创建
+              </button>
             </div>
           </div>
         </div>
@@ -687,314 +1008,497 @@ watch(
     <!-- Chat state -->
     <div v-else class="chat-area">
       <div v-show="!panelFullscreen" class="chat-main">
-      <!-- 会话标题栏 -->
-      <header class="chat-header">
-        <h1 class="chat-header-title">{{ agentStore.currentConversation?.title ?? '新对话' }}</h1>
-        <div class="chat-header-actions">
-          <button class="chat-header-btn" title="对话内搜索" :class="{ 'chat-header-btn--active': searchOpen }"
-            @click="searchOpen = !searchOpen">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round">
+        <!-- 会话标题栏 -->
+        <header class="chat-header">
+          <h1 class="chat-header-title">{{ agentStore.currentConversation?.title ?? '新对话' }}</h1>
+          <div class="chat-header-actions">
+            <button
+              class="chat-header-btn"
+              title="对话内搜索"
+              :class="{ 'chat-header-btn--active': searchOpen }"
+              @click="searchOpen = !searchOpen"
+            >
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+            </button>
+            <button class="chat-header-btn" title="分享" @click="shareConversation">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              >
+                <circle cx="18" cy="5" r="3" />
+                <circle cx="6" cy="12" r="3" />
+                <circle cx="18" cy="19" r="3" />
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+              </svg>
+            </button>
+            <div class="chat-header-btn-wrap" data-history-menu-trigger>
+              <button
+                class="chat-header-btn"
+                title="历史提问"
+                @click="historyMenuOpen = !historyMenuOpen"
+              >
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+              </button>
+              <Transition name="dropdown">
+                <div v-if="historyMenuOpen" class="history-menu">
+                  <p class="history-menu-title">历史提问 ({{ historyQuestions.length }})</p>
+                  <div class="history-menu-list">
+                    <button
+                      v-for="q in historyQuestions"
+                      :key="q.id"
+                      class="history-menu-item"
+                      @click="jumpToQuestion(q.id)"
+                    >
+                      <span class="history-menu-text">{{ q.content }}</span>
+                      <span v-if="q.createdAt" class="history-menu-time">{{
+                        formatTime(q.createdAt)
+                      }}</span>
+                    </button>
+                    <p v-if="historyQuestions.length === 0" class="history-menu-empty">暂无提问</p>
+                  </div>
+                </div>
+              </Transition>
+            </div>
+          </div>
+        </header>
+
+        <!-- 对话内搜索条 -->
+        <Transition name="dropdown">
+          <div v-if="searchOpen" class="chat-search-bar">
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
               <circle cx="11" cy="11" r="8" />
               <path d="m21 21-4.3-4.3" />
             </svg>
-          </button>
-          <button class="chat-header-btn" title="分享" @click="shareConversation">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round">
-              <circle cx="18" cy="5" r="3" />
-              <circle cx="6" cy="12" r="3" />
-              <circle cx="18" cy="19" r="3" />
-              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-            </svg>
-          </button>
-          <div class="chat-header-btn-wrap" data-history-menu-trigger>
-            <button class="chat-header-btn" title="历史提问" @click="historyMenuOpen = !historyMenuOpen">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
+            <input v-model="searchKeyword" class="chat-search-input" placeholder="搜索当前对话" />
+            <span class="chat-search-count"
+              >{{ searchMatches.length ? searchIndex + 1 : 0 }}/{{ searchMatches.length }}</span
+            >
+            <button
+              class="chat-search-btn"
+              title="上一条"
+              :disabled="!searchMatches.length"
+              @click="gotoSearch(-1)"
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              >
+                <polyline points="18 15 12 9 6 15" />
               </svg>
             </button>
-            <Transition name="dropdown">
-              <div v-if="historyMenuOpen" class="history-menu">
-                <p class="history-menu-title">历史提问 ({{ historyQuestions.length }})</p>
-                <div class="history-menu-list">
-                  <button v-for="q in historyQuestions" :key="q.id" class="history-menu-item"
-                    @click="jumpToQuestion(q.id)">
-                    <span class="history-menu-text">{{ q.content }}</span>
-                    <span v-if="q.createdAt" class="history-menu-time">{{ formatTime(q.createdAt) }}</span>
+            <button
+              class="chat-search-btn"
+              title="下一条"
+              :disabled="!searchMatches.length"
+              @click="gotoSearch(1)"
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+            <button class="chat-search-btn" title="关闭" @click="closeSearch">
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        </Transition>
+
+        <div class="chat-messages">
+          <div
+            v-for="msg in messages"
+            :key="msg.id"
+            :data-msg-id="msg.id"
+            :class="[
+              'chat-bubble-row',
+              msg.role === 'user' ? 'chat-bubble-row--user' : 'chat-bubble-row--assistant',
+              { 'chat-msg--hit': hitSet.has(msg.id), 'chat-msg--current': currentHitId === msg.id }
+            ]"
+          >
+            <!-- AI 回复：头像+名字在顶部，正文无背景色，底部操作栏 -->
+            <template v-if="msg.role === 'assistant'">
+              <div class="chat-bubble-head">
+                <div class="chat-avatar chat-avatar--ai chat-avatar--sm">
+                  <svg width="16" height="16" viewBox="0 0 64 64" fill="none">
+                    <ellipse cx="32" cy="38" rx="12" ry="14" fill="#0891b2" />
+                    <circle cx="32" cy="20" r="9" fill="#0891b2" />
+                    <circle cx="29" cy="19" r="2.5" fill="white" />
+                    <circle cx="29.5" cy="19" r="1.2" fill="#0e7490" />
+                  </svg>
+                </div>
+                <span class="chat-bubble-head-name">KeWork</span>
+              </div>
+              <div class="chat-bubble-wrapper">
+                <!-- 深度思考块 -->
+                <div v-if="msg.reasoning" class="thinking-block">
+                  <button class="thinking-header" @click="toggleThinking(msg.id)">
+                    <span class="thinking-header-text">深度思考</span>
+                    <svg
+                      :class="[
+                        'thinking-chevron',
+                        { 'thinking-chevron--collapsed': thinkingCollapsed[msg.id] }
+                      ]"
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
                   </button>
-                  <p v-if="historyQuestions.length === 0" class="history-menu-empty">暂无提问</p>
+                  <Transition name="thinking-collapse">
+                    <div v-show="!thinkingCollapsed[msg.id]" class="thinking-body">
+                      <MessageContent :content="msg.reasoning" content-type="markdown" />
+                    </div>
+                  </Transition>
+                </div>
+                <!-- 消息内容：有内容时渲染，空内容+流式输出时显示加载动画 -->
+                <div v-if="msg.content" class="chat-bubble">
+                  <MessageContent :content="msg.content" content-type="markdown" />
+                </div>
+                <div
+                  v-else-if="isLastAssistant(msg.id) && thinking"
+                  class="chat-bubble thinking-bubble"
+                >
+                  <span class="dot-pulse" style="animation-delay: 0s"></span>
+                  <span class="dot-pulse" style="animation-delay: 0.15s"></span>
+                  <span class="dot-pulse" style="animation-delay: 0.3s"></span>
                 </div>
               </div>
-            </Transition>
+              <!-- 操作栏：按钮组 + 元信息 -->
+              <div v-if="msg.content" class="chat-msg-actions">
+                <div class="chat-msg-action-group">
+                  <button class="chat-msg-action-btn" title="复制" @click="copyText(msg.content)">
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    >
+                      <rect x="9" y="9" width="13" height="13" rx="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                  </button>
+                  <button
+                    class="chat-msg-action-btn"
+                    :class="{ 'chat-msg-action-btn--active': feedbackMap[msg.id] === 'up' }"
+                    title="点赞"
+                    @click="toggleFeedback(msg.id, 'up')"
+                  >
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    >
+                      <path
+                        d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    class="chat-msg-action-btn"
+                    :class="{ 'chat-msg-action-btn--active': feedbackMap[msg.id] === 'down' }"
+                    title="点踩"
+                    @click="toggleFeedback(msg.id, 'down')"
+                  >
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    >
+                      <path
+                        d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zM17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    class="chat-msg-action-btn"
+                    :class="{ 'chat-msg-action-btn--active': speakingMsgId === msg.id }"
+                    title="朗读"
+                    @click="toggleSpeak(msg)"
+                  >
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    >
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                    </svg>
+                  </button>
+                  <button
+                    class="chat-msg-action-btn"
+                    title="重新生成"
+                    :disabled="isStreaming || !isLastAssistant(msg.id)"
+                    @click="regenerateLast"
+                  >
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    >
+                      <polyline points="23 4 23 10 17 10" />
+                      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                    </svg>
+                  </button>
+                  <button class="chat-msg-action-btn" title="分享" @click="copyText(msg.content)">
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    >
+                      <circle cx="18" cy="5" r="3" />
+                      <circle cx="6" cy="12" r="3" />
+                      <circle cx="18" cy="19" r="3" />
+                      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                    </svg>
+                  </button>
+                  <button class="chat-msg-action-btn" title="更多">
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    >
+                      <circle cx="12" cy="5" r="1" />
+                      <circle cx="12" cy="12" r="1" />
+                      <circle cx="12" cy="19" r="1" />
+                    </svg>
+                  </button>
+                </div>
+                <div class="chat-msg-meta">
+                  <span v-if="msg.durationMs" class="chat-msg-meta-item chat-msg-meta-item--strong">
+                    {{ formatDuration(msg.durationMs) }}
+                  </span>
+                  <span class="chat-msg-meta-item">{{ msg.model ?? model }}</span>
+                  <span v-if="msg.createdAt" class="chat-msg-meta-item">{{
+                    formatTime(msg.createdAt)
+                  }}</span>
+                </div>
+              </div>
+            </template>
+            <!-- 用户消息：无头像，浅灰背景 -->
+            <template v-else>
+              <div class="chat-bubble-wrapper chat-bubble-wrapper--user">
+                <div class="chat-bubble chat-bubble--user">
+                  <MessageContent :content="msg.content" content-type="markdown" />
+                </div>
+              </div>
+            </template>
           </div>
+          <div ref="bottomRef"></div>
         </div>
-      </header>
-
-      <!-- 对话内搜索条 -->
-      <Transition name="dropdown">
-        <div v-if="searchOpen" class="chat-search-bar">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round">
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.3-4.3" />
-          </svg>
-          <input v-model="searchKeyword" class="chat-search-input" placeholder="搜索当前对话" />
-          <span class="chat-search-count">{{ searchMatches.length ? searchIndex + 1 : 0 }}/{{ searchMatches.length }}</span>
-          <button class="chat-search-btn" title="上一条" :disabled="!searchMatches.length" @click="gotoSearch(-1)">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round">
-              <polyline points="18 15 12 9 6 15" />
-            </svg>
-          </button>
-          <button class="chat-search-btn" title="下一条" :disabled="!searchMatches.length" @click="gotoSearch(1)">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-          <button class="chat-search-btn" title="关闭"
-            @click="searchOpen = false; searchKeyword = ''">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-      </Transition>
-
-      <div class="chat-messages">
-        <div v-for="msg in messages" :key="msg.id" :data-msg-id="msg.id"
-          :class="['chat-bubble-row', msg.role === 'user' ? 'chat-bubble-row--user' : 'chat-bubble-row--assistant',
-            { 'chat-msg--hit': hitSet.has(msg.id), 'chat-msg--current': currentHitId === msg.id }]">
-          <!-- AI 回复：头像+名字在顶部，正文无背景色，底部操作栏 -->
-          <template v-if="msg.role === 'assistant'">
-            <div class="chat-bubble-head">
-              <div class="chat-avatar chat-avatar--ai chat-avatar--sm">
-                <svg width="16" height="16" viewBox="0 0 64 64" fill="none">
-                  <ellipse cx="32" cy="38" rx="12" ry="14" fill="#0891b2" />
-                  <circle cx="32" cy="20" r="9" fill="#0891b2" />
-                  <circle cx="29" cy="19" r="2.5" fill="white" />
-                  <circle cx="29.5" cy="19" r="1.2" fill="#0e7490" />
+        <!-- Toast -->
+        <Transition name="dropdown">
+          <div v-if="toast" class="chat-toast">{{ toast }}</div>
+        </Transition>
+        <!-- Compact input -->
+        <div class="chat-input-bar">
+          <div class="chat-input-card">
+            <textarea
+              v-model="taskInput"
+              class="task-textarea task-textarea--compact"
+              placeholder="继续输入…"
+              rows="2"
+              @keydown.enter.exact.prevent="sendMessage"
+            ></textarea>
+            <div v-if="selectionChips.length" class="selection-chips selection-chips--compact">
+              <span
+                v-for="chip in selectionChips"
+                :key="chip.key"
+                class="selection-chip"
+                @click="removeChip(chip)"
+              >
+                <svg
+                  class="selection-chip-del"
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+                <span class="selection-chip-name">{{ chip.label }}</span>
+              </span>
+            </div>
+            <div class="input-toolbar input-toolbar--compact">
+              <button
+                class="toolbar-btn"
+                data-plus-menu-trigger
+                @click="showInputPlusMenu = !showInputPlusMenu"
+              >
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              </button>
+              <div v-if="catalog.selectedExpert" class="expert-chip" @click="removeExpert">
+                <span class="expert-chip-name">{{ catalog.selectedExpert.name }}</span>
+                <svg
+                  class="expert-chip-del"
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
               </div>
-              <span class="chat-bubble-head-name">KeWork</span>
+              <div class="toolbar-spacer"></div>
+              <button class="toolbar-btn">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                  <line x1="8" y1="23" x2="16" y2="23" />
+                </svg>
+              </button>
+              <!-- 发送/停止按钮 -->
+              <button
+                v-if="!isStreaming"
+                class="send-btn"
+                :class="{ 'send-btn--active': taskInput.trim() }"
+                @click="sendMessage"
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                >
+                  <line x1="22" y1="2" x2="11" y2="13" />
+                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                </svg>
+              </button>
+              <button v-else class="send-btn send-btn--stop" @click="agentStore.cancelMessage()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="4" y="4" width="16" height="16" rx="2" />
+                </svg>
+              </button>
+              <!-- Plus Menu -->
+              <Transition name="plus-menu-slide">
+                <PlusMenu
+                  v-if="showInputPlusMenu"
+                  compact
+                  @close="showInputPlusMenu = false"
+                  @navigate="onPlusNavigate"
+                />
+              </Transition>
             </div>
-            <div class="chat-bubble-wrapper">
-              <!-- 深度思考块 -->
-              <div v-if="msg.reasoning" class="thinking-block">
-                <button class="thinking-header" @click="toggleThinking(msg.id)">
-                  <span class="thinking-header-text">深度思考</span>
-                  <svg :class="['thinking-chevron', { 'thinking-chevron--collapsed': thinkingCollapsed[msg.id] }]"
-                    width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round">
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
-                </button>
-                <Transition name="thinking-collapse">
-                  <div v-show="!thinkingCollapsed[msg.id]" class="thinking-body">
-                    <MessageContent :content="msg.reasoning" content-type="markdown" />
-                  </div>
-                </Transition>
-              </div>
-              <!-- 消息内容：有内容时渲染，空内容+流式输出时显示加载动画 -->
-              <div v-if="msg.content" class="chat-bubble">
-                <MessageContent :content="msg.content" content-type="markdown" />
-              </div>
-              <div v-else-if="isLastAssistant(msg.id) && thinking" class="chat-bubble thinking-bubble">
-                <span class="dot-pulse" style="animation-delay: 0s"></span>
-                <span class="dot-pulse" style="animation-delay: 0.15s"></span>
-                <span class="dot-pulse" style="animation-delay: 0.3s"></span>
-              </div>
-            </div>
-            <!-- 操作栏：按钮组 + 元信息 -->
-            <div v-if="msg.content" class="chat-msg-actions">
-              <div class="chat-msg-action-group">
-                <button class="chat-msg-action-btn" title="复制" @click="copyText(msg.content)">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round">
-                    <rect x="9" y="9" width="13" height="13" rx="2" />
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                  </svg>
-                </button>
-                <button class="chat-msg-action-btn" :class="{ 'chat-msg-action-btn--active': feedbackMap[msg.id] === 'up' }"
-                  title="点赞" @click="toggleFeedback(msg.id, 'up')">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round">
-                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
-                  </svg>
-                </button>
-                <button class="chat-msg-action-btn"
-                  :class="{ 'chat-msg-action-btn--active': feedbackMap[msg.id] === 'down' }" title="点踩"
-                  @click="toggleFeedback(msg.id, 'down')">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round">
-                    <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zM17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
-                  </svg>
-                </button>
-                <button class="chat-msg-action-btn"
-                  :class="{ 'chat-msg-action-btn--active': speakingMsgId === msg.id }" title="朗读"
-                  @click="toggleSpeak(msg)">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
-                  </svg>
-                </button>
-                <button class="chat-msg-action-btn" title="重新生成" :disabled="isStreaming || !isLastAssistant(msg.id)"
-                  @click="regenerateLast">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round">
-                    <polyline points="23 4 23 10 17 10" />
-                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                  </svg>
-                </button>
-                <button class="chat-msg-action-btn" title="分享" @click="copyText(msg.content)">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round">
-                    <circle cx="18" cy="5" r="3" />
-                    <circle cx="6" cy="12" r="3" />
-                    <circle cx="18" cy="19" r="3" />
-                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-                  </svg>
-                </button>
-                <button class="chat-msg-action-btn" title="更多">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round">
-                    <circle cx="12" cy="5" r="1" />
-                    <circle cx="12" cy="12" r="1" />
-                    <circle cx="12" cy="19" r="1" />
-                  </svg>
-                </button>
-              </div>
-              <div class="chat-msg-meta">
-                <span v-if="msg.durationMs" class="chat-msg-meta-item chat-msg-meta-item--strong">
-                  {{ formatDuration(msg.durationMs) }}
-                </span>
-                <span class="chat-msg-meta-item">{{ msg.model ?? model }}</span>
-                <span v-if="msg.createdAt" class="chat-msg-meta-item">{{ formatTime(msg.createdAt) }}</span>
-              </div>
-            </div>
-          </template>
-          <!-- 用户消息：无头像，浅灰背景 -->
-          <template v-else>
-            <div class="chat-bubble-wrapper chat-bubble-wrapper--user">
-              <div class="chat-bubble chat-bubble--user">
-                <MessageContent :content="msg.content" content-type="markdown" />
-              </div>
-            </div>
-          </template>
-        </div>
-        <div ref="bottomRef"></div>
-      </div>
-      <!-- Toast -->
-      <Transition name="dropdown">
-        <div v-if="toast" class="chat-toast">{{ toast }}</div>
-      </Transition>
-      <!-- Compact input -->
-      <div class="chat-input-bar">
-        <div class="chat-input-card">
-          <textarea v-model="taskInput" class="task-textarea task-textarea--compact" placeholder="继续输入…" rows="2"
-            @keydown.enter.exact.prevent="sendMessage"></textarea>
-          <div class="input-toolbar input-toolbar--compact">
-            <button class="toolbar-btn" data-plus-menu-trigger @click="showInputPlusMenu = !showInputPlusMenu">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-            </button>
-            <div class="toolbar-spacer"></div>
-            <button class="toolbar-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="23" />
-                <line x1="8" y1="23" x2="16" y2="23" />
-              </svg>
-            </button>
-            <!-- 发送/停止按钮 -->
-            <button v-if="!isStreaming" class="send-btn" :class="{ 'send-btn--active': taskInput.trim() }"
-              @click="sendMessage">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <line x1="22" y1="2" x2="11" y2="13" />
-                <polygon points="22 2 15 22 11 13 2 9 22 2" />
-              </svg>
-            </button>
-            <button v-else class="send-btn send-btn--stop" @click="agentStore.cancelMessage()">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                <rect x="4" y="4" width="16" height="16" rx="2" />
-              </svg>
-            </button>
-            <!-- Plus Menu -->
-            <Transition name="plus-menu-slide">
-              <div v-if="showInputPlusMenu" class="plus-menu plus-menu--compact">
-                <button class="plus-menu-item" @click="showInputPlusMenu = false">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                  </svg>
-                  <span>添加文件</span>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    class="plus-menu-chevron">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                </button>
-                <button class="plus-menu-item" @click="showInputPlusMenu = false">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                  </svg>
-                  <span>模式</span>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    class="plus-menu-chevron">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                </button>
-                <button class="plus-menu-item" @click="showInputPlusMenu = false">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polygon
-                      points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                  </svg>
-                  <span>专家</span>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    class="plus-menu-chevron">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                </button>
-                <button class="plus-menu-item" @click="showInputPlusMenu = false">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="3" />
-                    <path
-                      d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                  </svg>
-                  <span>技能</span>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    class="plus-menu-chevron">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                </button>
-                <button class="plus-menu-item" @click="showInputPlusMenu = false">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="18" cy="5" r="3" />
-                    <circle cx="6" cy="12" r="3" />
-                    <circle cx="18" cy="19" r="3" />
-                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-                  </svg>
-                  <span>连接器</span>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    class="plus-menu-chevron">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                </button>
-              </div>
-            </Transition>
           </div>
         </div>
-      </div>
       </div>
       <ChatSidePanel v-model:fullscreen="panelFullscreen" />
     </div>
@@ -1356,62 +1860,84 @@ watch(
   background: rgba(8, 145, 178, 0.06);
 }
 
-/* Plus Menu */
-.plus-menu {
-  position: absolute;
-  bottom: 100%;
-  left: 0;
-  margin-bottom: 4px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.10), 0 4px 20px rgba(0, 0, 0, 0.08);
-  padding: 4px;
-  min-width: 180px;
-  z-index: 100;
+/* Selection chips（输入卡左上角：模式/技能/文件） */
+.selection-chips {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 16px 4px;
 }
 
-.plus-menu--compact {
-  left: 0;
-  bottom: calc(100% + 2px);
+.selection-chips--compact {
+  padding: 0 12px 2px;
 }
 
-.plus-menu-item {
+.selection-chip {
   display: flex;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 9px 10px;
-  border: none;
-  background: transparent;
-  border-radius: 7px;
-  color: #1e293b;
-  font-size: 13px;
-  font-family: inherit;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid rgba(8, 145, 178, 0.18);
+  border-radius: 999px;
+  background: rgba(8, 145, 178, 0.06);
+  color: #0e7490;
+  font-size: 11px;
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
 
-.plus-menu-item:hover {
-  background: #f1f5f9;
+.selection-chip:hover {
+  background: rgba(8, 145, 178, 0.12);
 }
 
-.plus-menu-item svg:first-child {
+.selection-chip-del {
   flex-shrink: 0;
-  color: #64748b;
+  opacity: 0;
+  transition: opacity 0.15s ease;
 }
 
-.plus-menu-item span {
-  flex: 1;
-  text-align: left;
+.selection-chip:hover .selection-chip-del {
+  opacity: 1;
 }
 
-.plus-menu-chevron {
+.selection-chip-name {
+  white-space: nowrap;
+}
+
+/* Expert chip（工具栏 + 号右侧，hover 显示删除） */
+.expert-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.08);
+  color: #7c3aed;
+  font-size: 11px;
+  cursor: pointer;
+  max-width: 160px;
+  transition: background-color 0.15s ease;
+}
+
+.expert-chip:hover {
+  background: rgba(139, 92, 246, 0.14);
+}
+
+.expert-chip-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.expert-chip-del {
   flex-shrink: 0;
-  color: #94a3b8;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.expert-chip:hover .expert-chip-del {
+  opacity: 1;
 }
 
 /* Workspace selector */
@@ -1427,7 +1953,9 @@ watch(
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
-  box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.1), 0 4px 20px rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 -2px 16px rgba(0, 0, 0, 0.1),
+    0 4px 20px rgba(0, 0, 0, 0.08);
   padding: 6px;
   z-index: 100;
   display: flex;
@@ -1591,7 +2119,9 @@ watch(
   font-family: inherit;
   color: #1a2332;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .modal-input:focus {
@@ -1627,7 +2157,9 @@ watch(
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
-  transition: opacity 0.15s ease, background-color 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .modal-btn--cancel {
@@ -1682,7 +2214,6 @@ watch(
   opacity: 0;
   transform: translateY(6px) scale(0.97);
 }
-
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Chat State
@@ -1926,7 +2457,6 @@ watch(
 }
 
 @keyframes dotBounce {
-
   0%,
   100% {
     transform: translateY(0);
@@ -1987,7 +2517,9 @@ watch(
   background: transparent;
   color: #9ca3af;
   cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .chat-header-btn:hover,
@@ -2120,7 +2652,9 @@ watch(
   color: #9ca3af;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .chat-search-btn:hover:not(:disabled) {
@@ -2161,7 +2695,9 @@ watch(
   background: transparent;
   color: #9ca3af;
   cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .chat-msg-action-btn:hover:not(:disabled) {
