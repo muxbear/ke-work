@@ -173,7 +173,7 @@ const onInputSync = (): void => {
   const domIds = new Set(
     Array.from(el.querySelectorAll<HTMLElement>('.skill-token')).map((t) => Number(t.dataset.skillId))
   )
-  for (const id of catalog.selectedSkillIds) {
+  for (const id of [...catalog.selectedSkillIds]) {
     if (!domIds.has(id)) catalog.toggleSkill(id)
   }
 }
@@ -626,6 +626,8 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('mousedown', handleDocumentClick)
   if ('speechSynthesis' in window) window.speechSynthesis.cancel()
+  // 输入框随页面卸载：丢弃未发送草稿的技能勾选（发送路径已清空，此处兜底导航/重挂载）
+  if (taskInput.value.trim()) catalog.clearSkills()
 })
 
 // 最后一条 assistant 消息的正文+思考长度（流式逐块增长时驱动实时追滚）
