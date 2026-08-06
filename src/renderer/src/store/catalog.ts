@@ -3,7 +3,7 @@ import { computed, nextTick, ref } from 'vue'
 
 /**
  * 目录数据与「+」菜单状态管理（渲染层）
- * 数据源与"专家·技能·连接器"页（ExpertPage）共用；选择类状态经 localStorage 持久化
+ * 数据源与"专家·技能·连接器"页（ExpertPage）共用；选择类状态（技能除外）经 localStorage 持久化
  */
 
 export type Mode = 'default' | 'local' | 'knowledge'
@@ -390,7 +390,7 @@ export const useCatalogStore = defineStore('catalog', () => {
     }
   }
 
-  /** 清空全部技能（发送成功后调用） */
+  /** 清空全部技能（发送时调用） */
   function clearSkills(): void {
     selectedSkillIds.value = []
   }
