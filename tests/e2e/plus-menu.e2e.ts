@@ -211,10 +211,13 @@ describe('E2E 「+」菜单', () => {
     const val = await page.locator('.task-textarea').inputValue()
     expect(val).toContain('请以【林晓雯·内容创作专家】')
 
-    // hover 徽标 → 删除图标出现；点击 → 徽标与提示词一并移除
+    // hover 徽标 → 头像内删除图标出现；点击 → 徽标与提示词一并移除
     await hoverAwayThen(chip)
     await page.waitForTimeout(200)
-    expect(await page.locator('.expert-chip-del').isVisible()).toBe(true)
+    const delOpacity = await chip
+      .locator('.expert-chip-avatar-del')
+      .evaluate((el) => getComputedStyle(el).opacity)
+    expect(delOpacity).toBe('1')
     await chip.click()
     await page.locator('.expert-chip').waitFor({ state: 'detached', timeout: 5_000 })
     const val2 = await page.locator('.task-textarea').inputValue()
