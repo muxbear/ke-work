@@ -2031,7 +2031,7 @@ watch(
   white-space: nowrap;
 }
 
-/* Expert chip（工具栏 + 号右侧，hover 显示删除） */
+/* Expert chip（工具栏 + 号右侧，hover 头像变删除图标） */
 .expert-chip {
   display: flex;
   align-items: center;
@@ -2055,6 +2055,16 @@ watch(
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.expert-chip-del {
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.expert-chip:hover .expert-chip-del {
+  opacity: 1;
 }
 
 /* 专家头像：渐变圆 + 悬停变删除图标 */
