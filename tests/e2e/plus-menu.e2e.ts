@@ -210,17 +210,33 @@ describe('E2E 「+」菜单', () => {
     const val = await page.locator('.task-textarea').innerText()
     expect(val).toContain('请以【林晓雯·内容创作专家】')
 
+    // 切换专家 → 提示词替换而非追加（旧专家提示词被剔除）
+    await openPlusMenu()
+    await hoverTop('专家')
+    await page.locator('.plus-submenu-item', { hasText: '陈法鉴' }).click()
+    await page.locator('.plus-menu').waitFor({ state: 'hidden', timeout: 5_000 })
+    expect(await chip.textContent()).toContain('陈法鉴')
+    const valSwitch = await page.locator('.task-textarea').innerText()
+    expect(valSwitch).toContain('请以【陈法鉴·法律顾问专家】')
+    expect(valSwitch).not.toContain('林晓雯')
+
     // hover 徽标 → 头像内删除图标出现；点击 → 徽标与提示词一并移除
+    // （过渡 0.15s，用 poll 等过渡完成，避免负载下读到中间值）
     await hoverAwayThen(chip)
-    await page.waitForTimeout(200)
-    const delOpacity = await chip
-      .locator('.expert-chip-avatar-del')
-      .evaluate((el) => getComputedStyle(el).opacity)
-    expect(delOpacity).toBe('1')
+    await expect
+      .poll(
+        () =>
+          chip
+            .locator('.expert-chip-avatar-del')
+            .evaluate((el) => getComputedStyle(el).opacity),
+        { timeout: 5_000 }
+      )
+      .toBe('1')
     await chip.click()
     await page.locator('.expert-chip').waitFor({ state: 'detached', timeout: 5_000 })
     const val2 = await page.locator('.task-textarea').innerText()
     expect(val2).not.toContain('林晓雯')
+    expect(val2).not.toContain('陈法鉴')
   }, 60_000)
 
   it('技能选中：菜单保持打开连续插入 token + hover 删除 + 发送序列化', async () => {
@@ -254,14 +270,35 @@ describe('E2E 「+」菜单', () => {
     await page.mouse.click(5, 200)
     await page.locator('.plus-menu').waitFor({ state: 'hidden', timeout: 5_000 })
 
-    // hover 第一个 token → 图标内 × opacity=1；点击删除 → 勾选态消失
+    // 未悬停：删除图标隐藏（opacity 默认值为 1，此处为 0 可证明 scoped 样式真实命中动态 token）
     const first = tokens.first()
-    await hoverAwayThen(first)
-    await page.waitForTimeout(200)
-    const delOpacity = await first
+    const restDelOpacity = await first
       .locator('.skill-token-del')
       .evaluate((el) => getComputedStyle(el).opacity)
-    expect(delOpacity).toBe('1')
+    expect(restDelOpacity).toBe('0')
+
+    // hover 第一个 token → 图标内 × 淡入（del opacity 1）+ 技能图标淡出（flash opacity 0）；点击删除
+    // （过渡 0.15s，固定等待在负载下可能读到中间值，用 poll 等过渡完成）
+    await hoverAwayThen(first)
+    await expect
+      .poll(
+        () =>
+          first
+            .locator('.skill-token-del')
+            .evaluate((el) => getComputedStyle(el).opacity),
+        { timeout: 5_000 }
+      )
+      .toBe('1')
+    await expect
+      .poll(
+        () =>
+          first
+            .locator('.skill-token-icon svg')
+            .first()
+            .evaluate((el) => getComputedStyle(el).opacity),
+        { timeout: 5_000 }
+      )
+      .toBe('0')
     await first.click()
     expect(await tokens.count()).toBe(1)
     expect(await tokens.first().innerText()).toContain('数据图表生成')

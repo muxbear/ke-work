@@ -248,26 +248,35 @@ const removeExpert = (): void => {
   catalog.clearExpert()
 }
 
-/** 专家提示词 ↔ contenteditable DOM 同步（选中插入开头，移除时剔除原文） */
+/** 从输入框文本中剔除提示词原文（前缀优先，兜底扫描任意文本节点） */
+const removePromptFromDom = (el: HTMLElement, prompt: string): void => {
+  const prefix = prompt + '\n'
+  const first = el.firstChild
+  if (first && first.nodeType === Node.TEXT_NODE && (first.textContent ?? '').startsWith(prefix)) {
+    const rest = (first.textContent ?? '').slice(prefix.length)
+    if (rest) first.textContent = rest
+    else el.removeChild(first)
+    return
+  }
+  // 兜底：提示词被编辑/移位时，在任何文本节点中剔除原文
+  for (const node of Array.from(el.childNodes)) {
+    if (node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').includes(prompt)) {
+      node.textContent = (node.textContent ?? '').split(prompt).join('').replace(/^\n+/, '')
+      return
+    }
+  }
+}
+
+/** 专家提示词 ↔ contenteditable DOM 同步（插入开头；切换专家先剔除旧提示词再插入新提示词） */
 const syncExpertPromptToDom = (el: HTMLElement, prompt: string, prev: string): void => {
+  if (prompt && prev && prompt !== prev && el.innerText.includes(prev)) {
+    // 切换专家：先剔除上一个专家的提示词，避免叠加成两条
+    removePromptFromDom(el, prev)
+  }
   if (prompt && !el.innerText.includes(prompt)) {
     el.insertBefore(document.createTextNode(prompt + '\n'), el.firstChild)
   } else if (!prompt && prev) {
-    const prefix = prev + '\n'
-    const first = el.firstChild
-    if (first && first.nodeType === Node.TEXT_NODE && (first.textContent ?? '').startsWith(prefix)) {
-      const rest = (first.textContent ?? '').slice(prefix.length)
-      if (rest) first.textContent = rest
-      else el.removeChild(first)
-    } else {
-      // 兜底：提示词被编辑/移位时，在任何文本节点中剔除原文
-      for (const node of Array.from(el.childNodes)) {
-        if (node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').includes(prev)) {
-          node.textContent = (node.textContent ?? '').split(prev).join('').replace(/^\n+/, '')
-          break
-        }
-      }
-    }
+    removePromptFromDom(el, prev)
   }
   taskInput.value = el.innerText
 }
@@ -2301,8 +2310,9 @@ watch(
   opacity: 1;
 }
 
-/* 技能 token（contenteditable 输入框内：图标 + 名称，hover 图标变删除） */
-.skill-token {
+/* 技能 token（contenteditable 输入框内：图标 + 名称，hover 图标变删除）
+   注意：token 由 createElement 动态创建，无 scoped data-v 属性，选择器必须用 :deep() */
+:deep(.skill-token) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -2316,7 +2326,7 @@ watch(
   white-space: nowrap;
 }
 
-.skill-token-icon {
+:deep(.skill-token-icon) {
   position: relative;
   width: 16px;
   height: 16px;
@@ -2327,26 +2337,26 @@ watch(
   flex-shrink: 0;
 }
 
-.skill-token-icon svg {
+:deep(.skill-token-icon svg) {
   transition: opacity 0.15s ease;
 }
 
-.skill-token-del {
+:deep(.skill-token-del) {
   position: absolute;
   inset: 0;
   margin: auto;
   opacity: 0;
 }
 
-.skill-token:hover .skill-token-icon svg:first-child {
+:deep(.skill-token:hover .skill-token-icon svg:first-child) {
   opacity: 0;
 }
 
-.skill-token:hover .skill-token-del {
+:deep(.skill-token:hover .skill-token-del) {
   opacity: 1;
 }
 
-.skill-token-name {
+:deep(.skill-token-name) {
   font-size: 12px;
   color: #0e7490;
   white-space: nowrap;
