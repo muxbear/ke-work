@@ -5,7 +5,7 @@ import { useWorkspaceStore } from '@store/workspace'
 import MessageContent from '@components/MessageContent.vue'
 import ChatSidePanel from '@components/ChatSidePanel.vue'
 import PlusMenu from '@components/PlusMenu.vue'
-import { useCatalogStore, type Mode } from '@store/catalog'
+import { useCatalogStore, type Mode, type SkillItem } from '@store/catalog'
 
 const agentStore = useAgentStore()
 const workspaceStore = useWorkspaceStore()
@@ -24,6 +24,147 @@ const model = ref('Auto')
 const modelOpen = ref(false)
 const showInputPlusMenu = ref(false)
 const chipsScrollRef = ref<HTMLElement | null>(null)
+
+// ── 技能 token（contenteditable 输入框）──
+const welcomeInputRef = ref<HTMLElement | null>(null)
+const chatInputRef = ref<HTMLElement | null>(null)
+const pendingExpertPromptSync = ref(false)
+
+/** 当前可见的输入框元素（欢迎态与对话态互斥挂载） */
+const getInputEl = (): HTMLElement | null => welcomeInputRef.value ?? chatInputRef.value
+
+/** 序列化输入框 DOM → 消息文本：文本节点原样；技能 token → /技能名 */
+const serializeInput = (el: HTMLElement): string => {
+  let out = ''
+  for (const node of el.childNodes) {
+    if (node.nodeType === Node.TEXT_NODE) out += node.textContent ?? ''
+    else if (node instanceof HTMLElement && node.classList.contains('skill-token')) {
+      out += '/' + (node.dataset.name ?? node.textContent ?? '')
+    }
+  }
+  return out
+}
+
+/** 在光标处插入技能 token（无有效光标时追加到末尾），光标移到 token 后 */
+const insertSkillTokenAtCaret = (el: HTMLElement, skill: SkillItem): void => {
+  const sel = window.getSelection()
+  let range: Range
+  if (sel && sel.rangeCount > 0 && el.contains(sel.anchorNode)) {
+    range = sel.getRangeAt(0)
+    range.collapse(false)
+  } else {
+    range = document.createRange()
+    range.selectNodeContents(el)
+    range.collapse(false)
+  }
+  const token = document.createElement('span')
+  token.className = 'skill-token'
+  token.dataset.skillId = String(skill.id)
+  token.dataset.name = skill.name
+  token.contentEditable = 'false'
+  const icon = document.createElement('span')
+  icon.className = 'skill-token-icon'
+  icon.style.background = skill.color
+  const flash = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  flash.setAttribute('width', '9')
+  flash.setAttribute('height', '9')
+  flash.setAttribute('viewBox', '0 0 24 24')
+  flash.setAttribute('fill', 'none')
+  flash.setAttribute('stroke', 'white')
+  flash.setAttribute('stroke-width', '3')
+  const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon')
+  poly.setAttribute('points', '13 2 3 14 12 14 11 22 21 10 12 10 13 2')
+  flash.appendChild(poly)
+  const del = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  del.classList.add('skill-token-del')
+  del.setAttribute('width', '10')
+  del.setAttribute('height', '10')
+  del.setAttribute('viewBox', '0 0 24 24')
+  del.setAttribute('fill', 'none')
+  del.setAttribute('stroke', 'white')
+  del.setAttribute('stroke-width', '2.5')
+  del.setAttribute('stroke-linecap', 'round')
+  const l1 = document.createElementNS('http://www.w3.org/2000/svg', 'line')
+  l1.setAttribute('x1', '18')
+  l1.setAttribute('y1', '6')
+  l1.setAttribute('x2', '6')
+  l1.setAttribute('y2', '18')
+  const l2 = document.createElementNS('http://www.w3.org/2000/svg', 'line')
+  l2.setAttribute('x1', '6')
+  l2.setAttribute('y1', '6')
+  l2.setAttribute('x2', '18')
+  l2.setAttribute('y2', '18')
+  del.appendChild(l1)
+  del.appendChild(l2)
+  icon.appendChild(flash)
+  icon.appendChild(del)
+  const name = document.createElement('span')
+  name.className = 'skill-token-name'
+  name.textContent = skill.name
+  token.appendChild(icon)
+  token.appendChild(name)
+  range.insertNode(token)
+  range.setStartAfter(token)
+  range.collapse(true)
+  sel?.removeAllRanges()
+  sel?.addRange(range)
+  taskInput.value = el.innerText
+}
+
+/** 从 DOM 移除第一个指定技能的 token */
+const removeSkillTokenFromDom = (el: HTMLElement, id: number): void => {
+  for (const node of Array.from(el.children)) {
+    if (node instanceof HTMLElement && node.classList.contains('skill-token')) {
+      if (Number(node.dataset.skillId) === id) {
+        node.remove()
+        break
+      }
+    }
+  }
+  taskInput.value = el.innerText
+}
+
+/** 菜单选技能：切 store 勾选（真相源）+ 同步 DOM（插入或移除 token） */
+const onSelectSkillToken = (id: number): void => {
+  const skill = catalog.skillItems.find((s) => s.id === id)
+  const el = getInputEl()
+  if (!skill || !el) return
+  const willSelect = !catalog.selectedSkillIds.includes(id)
+  catalog.toggleSkill(id)
+  if (willSelect) insertSkillTokenAtCaret(el, skill)
+  else removeSkillTokenFromDom(el, id)
+}
+
+/** 点击输入框内技能 token → 删除（hover 变 × 由 CSS 实现）；普通点击不拦截 */
+const onInputClick = (e: MouseEvent): void => {
+  const el = getInputEl()
+  if (!el) return
+  const token = (e.target as HTMLElement).closest<HTMLElement>('.skill-token')
+  if (!token) return
+  e.preventDefault()
+  const prevSibling = token.previousSibling
+  const id = Number(token.dataset.skillId)
+  token.remove()
+  catalog.toggleSkill(id) // 移除勾选，菜单勾选态同步消失
+  taskInput.value = el.innerText
+  const sel = window.getSelection()
+  if (!sel) return
+  const range = document.createRange()
+  if (prevSibling) {
+    range.setStartAfter(prevSibling)
+    range.collapse(true)
+  } else {
+    range.selectNodeContents(el)
+    range.collapse(true)
+  }
+  sel.removeAllRanges()
+  sel.addRange(range)
+}
+
+/** 输入事件：同步 taskInput 纯文本快照 */
+const onInputSync = (): void => {
+  taskInput.value = getInputEl()?.innerText ?? ''
+}
 
 // ── 消息区滚动状态（追滚/回顶回底按钮的数据源）──
 const messagesScrollRef = ref<HTMLElement | null>(null)
@@ -68,19 +209,16 @@ const MODE_LABELS: Record<Mode, string> = {
 interface SelectionChip {
   key: string
   label: string
-  kind: 'mode' | 'skill' | 'file'
+  kind: 'mode' | 'file'
   id?: number
   path?: string
 }
 
-/** 输入卡左上角 chips：模式(非默认) + 已选技能 + 已挂载文件（按选择顺序） */
+/** 输入卡左上角 chips：模式(非默认) + 已挂载文件（技能 token 已移入输入框） */
 const selectionChips = computed<SelectionChip[]>(() => {
   const chips: SelectionChip[] = []
   if (catalog.mode !== 'default') {
     chips.push({ key: 'mode', label: `模式 · ${MODE_LABELS[catalog.mode]}`, kind: 'mode' })
-  }
-  for (const s of catalog.selectedSkills) {
-    chips.push({ key: `skill-${s.id}`, label: s.name, kind: 'skill', id: s.id })
   }
   for (const f of catalog.attachedFiles) {
     chips.push({ key: `file-${f.path}`, label: f.name, kind: 'file', path: f.path })
@@ -91,7 +229,6 @@ const selectionChips = computed<SelectionChip[]>(() => {
 /** 点击 chip 移除对应选择（模式回默认） */
 const removeChip = (chip: SelectionChip): void => {
   if (chip.kind === 'mode') catalog.setMode('default')
-  else if (chip.kind === 'skill' && chip.id !== undefined) catalog.toggleSkill(chip.id)
   else if (chip.kind === 'file' && chip.path) catalog.removeFile(chip.path)
 }
 
@@ -100,18 +237,39 @@ const removeExpert = (): void => {
   catalog.clearExpert()
 }
 
-/** 专家提示词 ↔ textarea 同步（选中插入，移除时剔除原文） */
+/** 专家提示词 ↔ contenteditable DOM 同步（选中插入开头，移除时剔除原文） */
+const syncExpertPromptToDom = (el: HTMLElement, prompt: string, prev: string): void => {
+  if (prompt && !el.innerText.includes(prompt)) {
+    el.insertBefore(document.createTextNode(prompt + '\n'), el.firstChild)
+  } else if (!prompt && prev) {
+    const prefix = prev + '\n'
+    const first = el.firstChild
+    if (first && first.nodeType === Node.TEXT_NODE && (first.textContent ?? '').startsWith(prefix)) {
+      const rest = (first.textContent ?? '').slice(prefix.length)
+      if (rest) first.textContent = rest
+      else el.removeChild(first)
+    }
+  }
+  taskInput.value = el.innerText
+}
+
 watch(
   () => catalog.selectedExpertPrompt,
   (prompt, prev) => {
-    if (prompt && !taskInput.value.includes(prompt)) {
-      taskInput.value = taskInput.value ? `${prompt}\n${taskInput.value}` : prompt
-    } else if (!prompt && prev) {
-      taskInput.value = taskInput.value.split(prev).join('').replace(/^\n+/, '')
-    }
+    const el = getInputEl()
+    if (el) syncExpertPromptToDom(el, prompt, prev ?? '')
+    else pendingExpertPromptSync.value = true
   },
   { immediate: true }
 )
+
+/** 输入框挂载时若有待同步提示词（页面启动时持久化恢复的专家）则插入 */
+watch([welcomeInputRef, chatInputRef], () => {
+  const el = getInputEl()
+  if (!el || !pendingExpertPromptSync.value) return
+  pendingExpertPromptSync.value = false
+  syncExpertPromptToDom(el, catalog.selectedExpertPrompt, '')
+})
 
 /** 菜单内导航 → Home 切换页面（具体标签页由 catalog store 的 pageTab 决定） */
 const onPlusNavigate = (): void => {
@@ -358,15 +516,22 @@ const scrollChips = (dir: 'left' | 'right'): void => {
 }
 
 const sendMessage = (): void => {
-  if (!taskInput.value.trim()) return
-  const content = taskInput.value.trim()
+  const el = getInputEl()
+  const content = el ? serializeInput(el) : taskInput.value
+  if (!content.trim()) return
+  // 清空输入框（DOM + 快照 + 技能勾选 + 抑制挂载时提示词重插）
+  if (el) el.textContent = ''
   taskInput.value = ''
+  pendingExpertPromptSync.value = false
+  catalog.clearSkills()
   // 用户主动触发的消息动作：即使向上翻阅过也强制回到底部跟随
   atBottom.value = true
-  agentStore.sendMessage(content, { model: model.value }).catch((err: unknown) => {
+  agentStore.sendMessage(content.trim(), { model: model.value }).catch((err: unknown) => {
     console.error('[NewTaskPage] sendMessage failed:', err)
-    // 失败时恢复输入内容，避免用户输入丢失且无反馈
-    taskInput.value = content
+    // 失败时恢复输入内容（token 恢复为纯文本，与现状一致）
+    const cur = getInputEl()
+    if (cur) cur.textContent = content.trim()
+    taskInput.value = content.trim()
   })
 }
 
@@ -692,13 +857,15 @@ watch(
 
       <!-- Input card -->
       <div class="input-card">
-        <textarea
-          v-model="taskInput"
+        <div
+          ref="welcomeInputRef"
           class="task-textarea"
-          placeholder="今天帮你做些什么？  @ 引用对话文件，/ 调用技能与指令"
-          rows="3"
+          contenteditable="true"
+          data-placeholder="今天帮你做些什么？  @ 引用对话文件，/ 调用技能与指令"
+          @input="onInputSync"
+          @click="onInputClick"
           @keydown.enter.exact.prevent="sendMessage"
-        ></textarea>
+        ></div>
         <div v-if="selectionChips.length" class="selection-chips">
           <span
             v-for="chip in selectionChips"
@@ -861,6 +1028,7 @@ watch(
           <Transition name="plus-menu-slide">
             <PlusMenu
               v-if="showInputPlusMenu"
+              @select-skill="onSelectSkillToken"
               @close="showInputPlusMenu = false"
               @navigate="onPlusNavigate"
             />
@@ -1510,13 +1678,15 @@ watch(
         <!-- Compact input -->
         <div class="chat-input-bar">
           <div class="chat-input-card">
-            <textarea
-              v-model="taskInput"
+            <div
+              ref="chatInputRef"
               class="task-textarea task-textarea--compact"
-              placeholder="继续输入…"
-              rows="2"
+              contenteditable="true"
+              data-placeholder="继续输入…"
+              @input="onInputSync"
+              @click="onInputClick"
               @keydown.enter.exact.prevent="sendMessage"
-            ></textarea>
+            ></div>
             <div v-if="selectionChips.length" class="selection-chips selection-chips--compact">
               <span
                 v-for="chip in selectionChips"
@@ -1622,6 +1792,7 @@ watch(
                 <PlusMenu
                   v-if="showInputPlusMenu"
                   compact
+                  @select-skill="onSelectSkillToken"
                   @close="showInputPlusMenu = false"
                   @navigate="onPlusNavigate"
                 />
@@ -1807,14 +1978,22 @@ watch(
   font-family: inherit;
   color: #1e293b;
   box-sizing: border-box;
+  min-height: 84px;
+  line-height: 1.6;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
-.task-textarea::placeholder {
+.task-textarea:empty::before {
+  content: attr(data-placeholder);
   color: #9ca3af;
+  pointer-events: none;
 }
 
 .task-textarea--compact {
   padding: 12px 12px 4px;
+  min-height: 60px;
 }
 
 /* Input toolbar */
@@ -2093,6 +2272,57 @@ watch(
 
 .expert-chip:hover .expert-chip-avatar-del {
   opacity: 1;
+}
+
+/* 技能 token（contenteditable 输入框内：图标 + 名称，hover 图标变删除） */
+.skill-token {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  margin: 0 1px;
+  border: 1px solid rgba(8, 145, 178, 0.18);
+  border-radius: 999px;
+  background: rgba(8, 145, 178, 0.06);
+  cursor: pointer;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.skill-token-icon {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.skill-token-icon svg {
+  transition: opacity 0.15s ease;
+}
+
+.skill-token-del {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  opacity: 0;
+}
+
+.skill-token:hover .skill-token-icon svg:first-child {
+  opacity: 0;
+}
+
+.skill-token:hover .skill-token-del {
+  opacity: 1;
+}
+
+.skill-token-name {
+  font-size: 12px;
+  color: #0e7490;
+  white-space: nowrap;
 }
 
 /* Workspace selector */

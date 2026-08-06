@@ -106,9 +106,8 @@ const onSelectExpert = (id: number): void => {
   emit('close')
 }
 
-/** 选择技能：切换勾选 + 通知页面插入输入框 + 关闭菜单（多选需重开菜单） */
+/** 选择技能：通知页面插入输入框 + 关闭菜单（多选需重开菜单） */
 const onSelectSkill = (id: number): void => {
-  store.toggleSkill(id)
   emit('select-skill', id)
   emit('close')
 }
