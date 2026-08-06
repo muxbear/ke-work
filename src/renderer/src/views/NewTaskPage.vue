@@ -42,7 +42,10 @@ const updateScrollState = (): void => {
 
 /** 容器挂载时刷新一次状态（初次渲染无 scroll 事件，避免状态残留默认值） */
 watch(messagesScrollRef, (el) => {
-  if (el) updateScrollState()
+  if (!el) return
+  updateScrollState()
+  // 回显路径：页面挂载时消息已加载（从其它标签切到新建任务打开会话），直接滚底
+  if (currentMessages.value.length > 0) scrollMessagesToBottom()
 })
 
 /** 回顶/回底跳转（按钮点击，smooth 滚动） */
