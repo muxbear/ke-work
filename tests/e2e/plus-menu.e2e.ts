@@ -8,7 +8,7 @@
  *  - hover 滑出 5 个二级子菜单及其内容
  *  - 模式开关互斥（radio）
  *  - 专家选中：工具栏「+」右侧徽标 + textarea 使用提示词 + 菜单关闭；hover 删除图标；点击移除
- *  - 技能选中：输入卡左上角徽标依次追加 + 菜单关闭；hover 删除图标；点击移除
+ *  - 技能选中：输入框光标处插入 token（图标+名称）+ 菜单关闭；重开菜单可见勾选；hover 删除；发送序列化为 /技能名
  *  - 召唤更多专家 → 专家·技能·连接器页「专家」标签页
  *  - 连接器点击 → 「连接器」标签页 + 对应授权连接卡片高亮
  */
@@ -188,7 +188,6 @@ describe('E2E 「+」菜单', () => {
       mode: 'default',
       selectedExpertId: null,
       selectedExpertPrompt: '',
-      selectedSkillIds: [],
       recentExpertIds: [1, 2] // 林晓雯 / 陈法鉴
     })
 
@@ -208,7 +207,7 @@ describe('E2E 「+」菜单', () => {
     expect(chipBox.x).toBeGreaterThan(plusBox.x + plusBox.width)
 
     // textarea 插入使用提示词
-    const val = await page.locator('.task-textarea').inputValue()
+    const val = await page.locator('.task-textarea').innerText()
     expect(val).toContain('请以【林晓雯·内容创作专家】')
 
     // hover 徽标 → 头像内删除图标出现；点击 → 徽标与提示词一并移除
@@ -220,43 +219,58 @@ describe('E2E 「+」菜单', () => {
     expect(delOpacity).toBe('1')
     await chip.click()
     await page.locator('.expert-chip').waitFor({ state: 'detached', timeout: 5_000 })
-    const val2 = await page.locator('.task-textarea').inputValue()
+    const val2 = await page.locator('.task-textarea').innerText()
     expect(val2).not.toContain('林晓雯')
   }, 60_000)
 
-  it('技能选中：输入卡左上角徽标依次追加 + hover 删除', async () => {
-    // 选中第一个技能 → 菜单关闭、左上角出现徽标
+  it('技能选中：输入框光标处插入 token + hover 删除 + 多选', async () => {
+    // 选第一个技能 → 菜单关闭、输入框内出现 token（图标 + 名称）
     await openPlusMenu()
     await hoverTop('技能')
     await page.locator('.plus-submenu-item', { hasText: 'PDF 深度解析' }).click()
     await page.locator('.plus-menu').waitFor({ state: 'hidden', timeout: 5_000 })
 
-    const chips = page.locator('.selection-chip')
-    await chips.first().waitFor({ state: 'visible', timeout: 5_000 })
-    expect(await chips.count()).toBe(1)
-    expect(await chips.first().textContent()).toContain('PDF 深度解析')
+    const input = page.locator('.task-textarea').first()
+    const tokens = input.locator('.skill-token')
+    await tokens.first().waitFor({ state: 'visible', timeout: 5_000 })
+    expect(await tokens.count()).toBe(1)
+    expect(await tokens.first().innerText()).toContain('PDF 深度解析')
+    // 菜单勾选态：重开菜单可见勾选
+    await openPlusMenu()
+    await hoverTop('技能')
+    await page
+      .locator('.plus-submenu-item', { hasText: 'PDF 深度解析' })
+      .locator('.plus-check')
+      .waitFor({ state: 'visible', timeout: 5_000 })
+    await page.locator('.plus-menu').press('Escape').catch(() => {})
 
-    // 再选一个 → 依次追加（选中即关闭，可重开继续追加）
+    // 再选一个 → 追加（选中即关闭，可重开继续追加）
     await openPlusMenu()
     await hoverTop('技能')
     await page.locator('.plus-submenu-item', { hasText: '数据图表生成' }).click()
     await page.locator('.plus-menu').waitFor({ state: 'hidden', timeout: 5_000 })
-    expect(await chips.count()).toBe(2)
-    expect(await chips.nth(0).textContent()).toContain('PDF 深度解析')
-    expect(await chips.nth(1).textContent()).toContain('数据图表生成')
+    expect(await tokens.count()).toBe(2)
+    expect(await tokens.nth(0).innerText()).toContain('PDF 深度解析')
+    expect(await tokens.nth(1).innerText()).toContain('数据图表生成')
 
-    // hover 第一个徽标 → 删除图标（名字左侧）出现；点击移除
-    const first = chips.first()
+    // hover 第一个 token → 图标内 × opacity=1；点击删除 → 菜单勾选态消失
+    const first = tokens.first()
     await hoverAwayThen(first)
     await page.waitForTimeout(200)
     const delOpacity = await first
-      .locator('svg')
-      .first()
+      .locator('.skill-token-del')
       .evaluate((el) => getComputedStyle(el).opacity)
     expect(delOpacity).toBe('1')
     await first.click()
-    expect(await chips.count()).toBe(1)
-    expect(await chips.first().textContent()).toContain('数据图表生成')
+    await page.waitForTimeout(200)
+    expect(await tokens.count()).toBe(1)
+    expect(await tokens.first().innerText()).toContain('数据图表生成')
+
+    // 发送 → 用户气泡文本含序列化命令 /技能名（用户气泡立即渲染，不依赖后端响应）
+    await page.locator('.send-btn').first().click()
+    const userBubble = page.locator('.chat-bubble--user').first()
+    await userBubble.waitFor({ state: 'visible', timeout: 10_000 })
+    expect(await userBubble.innerText()).toContain('/数据图表生成')
   }, 60_000)
 
   it('「召唤更多专家」→ 跳转专家·技能·连接器页「专家」标签页', async () => {
