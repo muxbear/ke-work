@@ -106,10 +106,9 @@ const onSelectExpert = (id: number): void => {
   emit('close')
 }
 
-/** 选择技能：通知页面插入输入框 + 关闭菜单（多选需重开菜单） */
+/** 选择技能：通知页面在光标处插入 token，菜单保持打开（连续多选，点外部关闭） */
 const onSelectSkill = (id: number): void => {
   emit('select-skill', id)
-  emit('close')
 }
 
 /** 选择连接器：跳转连接器页并定位授权连接卡片 */

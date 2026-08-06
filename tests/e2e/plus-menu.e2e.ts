@@ -8,7 +8,7 @@
  *  - hover 滑出 5 个二级子菜单及其内容
  *  - 模式开关互斥（radio）
  *  - 专家选中：工具栏「+」右侧徽标 + textarea 使用提示词 + 菜单关闭；hover 删除图标；点击移除
- *  - 技能选中：输入框光标处插入 token（图标+名称）+ 菜单关闭；重开菜单可见勾选；hover 删除；发送序列化为 /技能名
+ *  - 技能选中：输入框光标处插入 token（图标+名称）+ 菜单保持打开连续多选；hover 删除；发送序列化为 /技能名
  *  - 召唤更多专家 → 专家·技能·连接器页「专家」标签页
  *  - 连接器点击 → 「连接器」标签页 + 对应授权连接卡片高亮
  */
@@ -223,38 +223,38 @@ describe('E2E 「+」菜单', () => {
     expect(val2).not.toContain('林晓雯')
   }, 60_000)
 
-  it('技能选中：输入框光标处插入 token + hover 删除 + 多选', async () => {
-    // 选第一个技能 → 菜单关闭、输入框内出现 token（图标 + 名称）
+  it('技能选中：菜单保持打开连续插入 token + hover 删除 + 发送序列化', async () => {
+    // 选第一个技能 → 菜单保持打开、输入框内出现 token（图标 + 名称）
     await openPlusMenu()
     await hoverTop('技能')
     await page.locator('.plus-submenu-item', { hasText: 'PDF 深度解析' }).click()
-    await page.locator('.plus-menu').waitFor({ state: 'hidden', timeout: 5_000 })
 
     const input = page.locator('.task-textarea').first()
     const tokens = input.locator('.skill-token')
     await tokens.first().waitFor({ state: 'visible', timeout: 5_000 })
+    // 菜单未关闭（连续多选）
+    await page.locator('.plus-menu').waitFor({ state: 'visible', timeout: 5_000 })
     expect(await tokens.count()).toBe(1)
     expect(await tokens.first().innerText()).toContain('PDF 深度解析')
-    // 菜单勾选态：重开菜单可见勾选
-    await openPlusMenu()
-    await hoverTop('技能')
+    // 勾选态：已选技能带勾选
     await page
       .locator('.plus-submenu-item', { hasText: 'PDF 深度解析' })
       .locator('.plus-check')
       .waitFor({ state: 'visible', timeout: 5_000 })
-    // .plus-menu 无 Escape 关闭逻辑，点输入框外部空白关闭
-    await page.mouse.click(5, 200)
 
-    // 再选一个 → 追加（选中即关闭，可重开继续追加）
-    await openPlusMenu()
-    await hoverTop('技能')
+    // 再选一个 → 追加，菜单仍打开
     await page.locator('.plus-submenu-item', { hasText: '数据图表生成' }).click()
-    await page.locator('.plus-menu').waitFor({ state: 'hidden', timeout: 5_000 })
+    await page.locator('.plus-menu').waitFor({ state: 'visible', timeout: 5_000 })
     expect(await tokens.count()).toBe(2)
     expect(await tokens.nth(0).innerText()).toContain('PDF 深度解析')
     expect(await tokens.nth(1).innerText()).toContain('数据图表生成')
 
-    // hover 第一个 token → 图标内 × opacity=1；点击删除 → 菜单勾选态消失
+    // 菜单打开期间悬浮于输入框上方会盖住 token，先点外部空白关闭菜单，再验证 hover 删除
+    // （产品行为：菜单开着时用于连续添加技能；token 的悬停删除在关闭菜单后进行）
+    await page.mouse.click(5, 200)
+    await page.locator('.plus-menu').waitFor({ state: 'hidden', timeout: 5_000 })
+
+    // hover 第一个 token → 图标内 × opacity=1；点击删除 → 勾选态消失
     const first = tokens.first()
     await hoverAwayThen(first)
     await page.waitForTimeout(200)
@@ -272,13 +272,24 @@ describe('E2E 「+」菜单', () => {
       .locator('.plus-submenu-item', { hasText: 'PDF 深度解析' })
       .locator('.plus-check')
       .waitFor({ state: 'detached', timeout: 5_000 })
+    // 点输入框外部空白关闭菜单
     await page.mouse.click(5, 200)
 
-    // 发送 → 用户气泡文本含序列化命令 /技能名（用户气泡立即渲染，不依赖后端响应）
+    // 多行输入 + 发送 → 用户气泡含 /技能名，且 Shift+Enter 换行未在序列化中粘连
+    // （Enter 被 keydown.enter.exact.prevent 拦截用于发送；Shift+Enter 走浏览器默认插入换行）
+    await input.click()
+    await page.keyboard.type('第一行')
+    await page.keyboard.press('Shift+Enter')
+    await page.keyboard.type('第二行')
     await page.locator('.send-btn').first().click()
     const userBubble = page.locator('.chat-bubble--user').first()
     await userBubble.waitFor({ state: 'visible', timeout: 10_000 })
-    expect(await userBubble.innerText()).toContain('/数据图表生成')
+    const bubbleText = await userBubble.innerText()
+    expect(bubbleText).toContain('/数据图表生成')
+    expect(bubbleText).toContain('第一行')
+    expect(bubbleText).toContain('第二行')
+    // 换行保留：两行文本不得粘连成同一行（serializeInput 块级/换行处理）
+    expect(bubbleText).not.toContain('第一行第二行')
   }, 60_000)
 
   it('「召唤更多专家」→ 跳转专家·技能·连接器页「专家」标签页', async () => {
