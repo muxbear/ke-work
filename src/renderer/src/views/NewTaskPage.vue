@@ -271,6 +271,8 @@ const jumpToQuestion = (id: string): void => {
 
 /** 重新生成最后一条回复 */
 const regenerateLast = (): void => {
+  // 用户主动触发的消息动作：即使向上翻阅过也强制回到底部跟随
+  atBottom.value = true
   agentStore.regenerate({ model: model.value })
 }
 
@@ -341,6 +343,8 @@ const sendMessage = (): void => {
   if (!taskInput.value.trim()) return
   const content = taskInput.value.trim()
   taskInput.value = ''
+  // 用户主动触发的消息动作：即使向上翻阅过也强制回到底部跟随
+  atBottom.value = true
   agentStore.sendMessage(content, { model: model.value }).catch((err: unknown) => {
     console.error('[NewTaskPage] sendMessage failed:', err)
     // 失败时恢复输入内容，避免用户输入丢失且无反馈
