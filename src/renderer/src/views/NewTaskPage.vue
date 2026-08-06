@@ -741,20 +741,23 @@ watch(
             </svg>
           </button>
           <div v-if="catalog.selectedExpert" class="expert-chip" @click="removeExpert">
+            <span class="expert-chip-avatar" :style="{ background: catalog.selectedExpert.color }">
+              <span class="expert-chip-avatar-text">{{ catalog.selectedExpert.initials }}</span>
+              <svg
+                class="expert-chip-avatar-del"
+                width="10"
+                height="10"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </span>
             <span class="expert-chip-name">{{ catalog.selectedExpert.name }}</span>
-            <svg
-              class="expert-chip-del"
-              width="10"
-              height="10"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
           </div>
           <button class="toolbar-btn">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -2054,13 +2057,38 @@ watch(
   text-overflow: ellipsis;
 }
 
-.expert-chip-del {
+/* 专家头像：渐变圆 + 悬停变删除图标 */
+.expert-chip-avatar {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 8px;
+  font-weight: 700;
   flex-shrink: 0;
+}
+
+.expert-chip-avatar-text {
+  transition: opacity 0.15s ease;
+}
+
+.expert-chip-avatar-del {
+  position: absolute;
+  inset: 0;
+  margin: auto;
   opacity: 0;
   transition: opacity 0.15s ease;
 }
 
-.expert-chip:hover .expert-chip-del {
+.expert-chip:hover .expert-chip-avatar-text {
+  opacity: 0;
+}
+
+.expert-chip:hover .expert-chip-avatar-del {
   opacity: 1;
 }
 
