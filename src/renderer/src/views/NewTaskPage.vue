@@ -33,14 +33,15 @@ const pendingExpertPromptSync = ref(false)
 /** 当前可见的输入框元素（欢迎态与对话态互斥挂载） */
 const getInputEl = (): HTMLElement | null => welcomeInputRef.value ?? chatInputRef.value
 
-/** 序列化输入框 DOM → 消息文本：文本节点原样；技能 token → /技能名 */
+/** 序列化输入框 DOM → 消息文本：文本节点原样；技能 token → /技能名；换行/富文本元素取文本 */
 const serializeInput = (el: HTMLElement): string => {
   let out = ''
   for (const node of el.childNodes) {
     if (node.nodeType === Node.TEXT_NODE) out += node.textContent ?? ''
     else if (node instanceof HTMLElement && node.classList.contains('skill-token')) {
       out += '/' + (node.dataset.name ?? node.textContent ?? '')
-    }
+    } else if (node.nodeName === 'BR') out += '\n'
+    else if (node instanceof HTMLElement) out += node.textContent ?? ''
   }
   return out
 }
@@ -161,9 +162,20 @@ const onInputClick = (e: MouseEvent): void => {
   sel.addRange(range)
 }
 
-/** 输入事件：同步 taskInput 纯文本快照 */
+/** 输入事件：同步 taskInput 快照 + 与 store 勾选对账（退格整删 token 后清理过期勾选） */
 const onInputSync = (): void => {
-  taskInput.value = getInputEl()?.innerText ?? ''
+  const el = getInputEl()
+  if (!el) return
+  // 用户清空内容后浏览器可能残留 <br>，清掉让 :empty 占位符恢复
+  if (el.innerText.trim() === '' && el.innerHTML !== '') el.innerHTML = ''
+  taskInput.value = el.innerText
+  // 对账：DOM 中不存在的 token 从勾选中移除（退格键/选择删除路径）
+  const domIds = new Set(
+    Array.from(el.querySelectorAll<HTMLElement>('.skill-token')).map((t) => Number(t.dataset.skillId))
+  )
+  for (const id of catalog.selectedSkillIds) {
+    if (!domIds.has(id)) catalog.toggleSkill(id)
+  }
 }
 
 // ── 消息区滚动状态（追滚/回顶回底按钮的数据源）──
@@ -210,7 +222,6 @@ interface SelectionChip {
   key: string
   label: string
   kind: 'mode' | 'file'
-  id?: number
   path?: string
 }
 
@@ -248,6 +259,14 @@ const syncExpertPromptToDom = (el: HTMLElement, prompt: string, prev: string): v
       const rest = (first.textContent ?? '').slice(prefix.length)
       if (rest) first.textContent = rest
       else el.removeChild(first)
+    } else {
+      // 兜底：提示词被编辑/移位时，在任何文本节点中剔除原文
+      for (const node of Array.from(el.childNodes)) {
+        if (node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').includes(prev)) {
+          node.textContent = (node.textContent ?? '').split(prev).join('').replace(/^\n+/, '')
+          break
+        }
+      }
     }
   }
   taskInput.value = el.innerText
@@ -263,12 +282,18 @@ watch(
   { immediate: true }
 )
 
-/** 输入框挂载时若有待同步提示词（页面启动时持久化恢复的专家）则插入 */
-watch([welcomeInputRef, chatInputRef], () => {
+/** 输入框挂载时同步待处理提示词；欢迎态卸载时清理未发送草稿的勾选 */
+watch([welcomeInputRef, chatInputRef], ([w, c]) => {
   const el = getInputEl()
-  if (!el || !pendingExpertPromptSync.value) return
-  pendingExpertPromptSync.value = false
-  syncExpertPromptToDom(el, catalog.selectedExpertPrompt, '')
+  if (el && pendingExpertPromptSync.value) {
+    pendingExpertPromptSync.value = false
+    syncExpertPromptToDom(el, catalog.selectedExpertPrompt, '')
+  }
+  // 欢迎态输入框卸载（如侧栏打开历史会话）：草稿随 DOM 丢弃，同步清理技能勾选
+  if (w === null && c !== null && taskInput.value.trim()) {
+    catalog.clearSkills()
+    taskInput.value = ''
+  }
 })
 
 /** 菜单内导航 → Home 切换页面（具体标签页由 catalog store 的 pageTab 决定） */
