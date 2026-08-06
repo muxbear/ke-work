@@ -242,7 +242,8 @@ describe('E2E 「+」菜单', () => {
       .locator('.plus-submenu-item', { hasText: 'PDF 深度解析' })
       .locator('.plus-check')
       .waitFor({ state: 'visible', timeout: 5_000 })
-    await page.locator('.plus-menu').press('Escape').catch(() => {})
+    // .plus-menu 无 Escape 关闭逻辑，点输入框外部空白关闭
+    await page.mouse.click(5, 200)
 
     // 再选一个 → 追加（选中即关闭，可重开继续追加）
     await openPlusMenu()
@@ -262,9 +263,16 @@ describe('E2E 「+」菜单', () => {
       .evaluate((el) => getComputedStyle(el).opacity)
     expect(delOpacity).toBe('1')
     await first.click()
-    await page.waitForTimeout(200)
     expect(await tokens.count()).toBe(1)
     expect(await tokens.first().innerText()).toContain('数据图表生成')
+    // 重开菜单：已删除技能的勾选态同步消失
+    await openPlusMenu()
+    await hoverTop('技能')
+    await page
+      .locator('.plus-submenu-item', { hasText: 'PDF 深度解析' })
+      .locator('.plus-check')
+      .waitFor({ state: 'detached', timeout: 5_000 })
+    await page.mouse.click(5, 200)
 
     // 发送 → 用户气泡文本含序列化命令 /技能名（用户气泡立即渲染，不依赖后端响应）
     await page.locator('.send-btn').first().click()
