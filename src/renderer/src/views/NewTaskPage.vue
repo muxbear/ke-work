@@ -24,7 +24,6 @@ const model = ref('Auto')
 const modelOpen = ref(false)
 const showInputPlusMenu = ref(false)
 const chipsScrollRef = ref<HTMLElement | null>(null)
-const bottomRef = ref<HTMLElement | null>(null)
 
 // ── 消息区滚动状态（追滚/回顶回底按钮的数据源）──
 const messagesScrollRef = ref<HTMLElement | null>(null)
@@ -417,14 +416,41 @@ onUnmounted(() => {
   if ('speechSynthesis' in window) window.speechSynthesis.cancel()
 })
 
-// 消息更新时自动滚动到底部（搜索/历史提问定位期间抑制）
+// 最后一条 assistant 消息的正文+思考长度（流式逐块增长时驱动实时追滚）
+const lastAssistantContentLen = computed(() => {
+  for (let i = currentMessages.value.length - 1; i >= 0; i--) {
+    const m = currentMessages.value[i]
+    if (m.role === 'assistant') {
+      return (m.content?.length ?? 0) + (m.reasoning?.length ?? 0)
+    }
+  }
+  return 0
+})
+
+/** 用户位于底部时，把消息区滚到底部（瞬时赋值，流式高频增长不用 smooth） */
+const scrollMessagesToBottom = (): void => {
+  const el = messagesScrollRef.value
+  if (!el) return
+  el.scrollTop = el.scrollHeight
+  updateScrollState()
+}
+
+// 消息增删 / 流式开始结束：位于底部时滚底（搜索/历史提问定位期间抑制）
 watch(
   () => [currentMessages.value.length, isStreaming.value],
   () => {
     if (suppressAutoScroll.value) return
-    nextTick(() => bottomRef.value?.scrollIntoView({ behavior: 'smooth' }))
+    if (!atBottom.value) return
+    nextTick(scrollMessagesToBottom)
   }
 )
+
+// 流式内容逐块增长：位于底部时实时追滚（用户向上翻阅后 atBottom=false 即暂停跟随）
+watch(lastAssistantContentLen, () => {
+  if (suppressAutoScroll.value) return
+  if (!atBottom.value) return
+  nextTick(scrollMessagesToBottom)
+})
 </script>
 
 <template>
@@ -1394,7 +1420,6 @@ watch(
               </div>
             </template>
           </div>
-          <div ref="bottomRef"></div>
         </div>
         <!-- Toast -->
         <Transition name="dropdown">
