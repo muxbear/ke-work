@@ -26,6 +26,26 @@ const showInputPlusMenu = ref(false)
 const chipsScrollRef = ref<HTMLElement | null>(null)
 const bottomRef = ref<HTMLElement | null>(null)
 
+// ── 消息区滚动状态（追滚/回顶回底按钮的数据源）──
+const messagesScrollRef = ref<HTMLElement | null>(null)
+const SCROLL_NEAR_EDGE = 40
+const atTop = ref(true)
+const atBottom = ref(true)
+
+/** 由容器 scroll 事件驱动：按 40px 阈值刷新「接近顶部/底部」状态 */
+const updateScrollState = (): void => {
+  const el = messagesScrollRef.value
+  if (!el) return
+  const max = el.scrollHeight - el.clientHeight
+  atTop.value = el.scrollTop <= SCROLL_NEAR_EDGE
+  atBottom.value = el.scrollTop >= max - SCROLL_NEAR_EDGE
+}
+
+/** 容器挂载时刷新一次状态（初次渲染无 scroll 事件，避免状态残留默认值） */
+watch(messagesScrollRef, (el) => {
+  if (el) updateScrollState()
+})
+
 // ── 「+」菜单选中状态展示 ──
 const MODE_LABELS: Record<Mode, string> = {
   default: '默认',
@@ -1162,7 +1182,7 @@ watch(
           </div>
         </Transition>
 
-        <div class="chat-messages">
+        <div ref="messagesScrollRef" class="chat-messages" @scroll="updateScrollState">
           <div
             v-for="msg in messages"
             :key="msg.id"
