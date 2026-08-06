@@ -2241,7 +2241,9 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 16px;
-  scrollbar-width: none;
+  /* 细窄滚动条：内容不溢出时不显示，溢出时出现在消息区最右缘 */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(8, 145, 178, 0.28) transparent;
   /* 靠中间对齐 + 两侧留白（max-width 与 margin auto 必须同写） */
   width: 100%;
   max-width: 760px;
@@ -2249,7 +2251,20 @@ watch(
 }
 
 .chat-messages::-webkit-scrollbar {
-  display: none;
+  width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: rgba(8, 145, 178, 0.28);
+  border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+  background: rgba(8, 145, 178, 0.45);
 }
 
 .chat-bubble-row {
