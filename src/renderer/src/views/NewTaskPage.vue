@@ -129,6 +129,11 @@ const creating = ref(false)
 // ── Chat 态右侧栏 ──
 const panelFullscreen = ref(false)
 
+// 右侧栏全屏切换：.chat-main 以 v-show 隐藏会重置 scrollTop，恢复后刷新滚动状态（防按钮/追滚读陈旧值）
+watch(panelFullscreen, () => {
+  nextTick(updateScrollState)
+})
+
 // ── AI 消息操作栏 ──
 const toast = ref('')
 let toastTimer: ReturnType<typeof setTimeout> | null = null
