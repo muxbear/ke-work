@@ -45,6 +45,16 @@ watch(messagesScrollRef, (el) => {
   if (el) updateScrollState()
 })
 
+/** 回顶/回底跳转（按钮点击，smooth 滚动） */
+const scrollToTop = (): void => {
+  messagesScrollRef.value?.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+const scrollToBottom = (): void => {
+  const el = messagesScrollRef.value
+  if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+}
+
 // ── 「+」菜单选中状态展示 ──
 const MODE_LABELS: Record<Mode, string> = {
   default: '默认',
@@ -1429,6 +1439,43 @@ watch(lastAssistantContentLen, () => {
         <Transition name="dropdown">
           <div v-if="toast" class="chat-toast">{{ toast }}</div>
         </Transition>
+        <!-- 消息区滚动定位按钮：接近顶部→回底，接近底部→回顶；中间位置不显示 -->
+        <button
+          v-if="atTop && !atBottom"
+          class="chat-scroll-jump"
+          title="回到底部"
+          @click="scrollToBottom"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+        <button
+          v-else-if="atBottom && !atTop"
+          class="chat-scroll-jump"
+          title="回到顶部"
+          @click="scrollToTop"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <polyline points="18 15 12 9 6 15" />
+          </svg>
+        </button>
         <!-- Compact input -->
         <div class="chat-input-bar">
           <div class="chat-input-card">
@@ -2281,6 +2328,7 @@ watch(lastAssistantContentLen, () => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
 
 .chat-messages {
@@ -2314,6 +2362,36 @@ watch(lastAssistantContentLen, () => {
 
 .chat-messages::-webkit-scrollbar-thumb:hover {
   background: rgba(8, 145, 178, 0.45);
+}
+
+/* 消息区浮动跳转按钮（与 760px 消息列右缘对齐；悬于输入栏上方） */
+.chat-scroll-jump {
+  position: absolute;
+  right: max(8px, calc(50% - 380px));
+  bottom: 132px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid rgba(8, 145, 178, 0.2);
+  border-radius: 50%;
+  background: #ffffff;
+  color: #0e7490;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.12);
+  z-index: 10;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.chat-scroll-jump:hover {
+  background: rgba(8, 145, 178, 0.08);
+  color: #0891b2;
+  box-shadow: 0 2px 12px rgba(8, 145, 178, 0.25);
 }
 
 .chat-bubble-row {
