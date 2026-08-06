@@ -12,7 +12,11 @@ import { useCatalogStore, type CatalogTab, type Mode } from '@store/catalog'
  */
 
 defineProps<{ compact?: boolean }>()
-const emit = defineEmits<{ close: []; navigate: [tab: CatalogTab] }>()
+const emit = defineEmits<{
+  close: []
+  navigate: [tab: CatalogTab]
+  'select-skill': [id: number]
+}>()
 
 const store = useCatalogStore()
 
@@ -102,9 +106,10 @@ const onSelectExpert = (id: number): void => {
   emit('close')
 }
 
-/** 选择技能：多选切换 + 关闭菜单（可重开继续追加） */
+/** 选择技能：切换勾选 + 通知页面插入输入框 + 关闭菜单（多选需重开菜单） */
 const onSelectSkill = (id: number): void => {
   store.toggleSkill(id)
+  emit('select-skill', id)
   emit('close')
 }
 
