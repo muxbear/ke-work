@@ -583,7 +583,10 @@ const adjustMenuDirection = (): void => {
                   <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
                   <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
                 </svg>
-                <span>{{ group.ws.name }}</span>
+                <span>
+                  {{ group.ws.name }}
+                  <span v-if="group.ws.id === workspaceStore.currentId" class="space-header-dot"></span>
+                </span>
                 <div class="space-header-right">
                   <div class="space-header-actions">
                     <button
@@ -1421,17 +1424,23 @@ const adjustMenuDirection = (): void => {
   background: rgba(8, 145, 178, 0.03);
 }
 
-/* 当前激活工作空间（新建任务页右下角选中）标记 */
-.space-header--active {
-  background: rgba(8, 145, 178, 0.08);
-}
-
+/* 当前激活工作空间（新建任务页右下角选中）标记：名字右侧红色实心圆点 */
 .space-header--active svg {
   color: #0891b2;
 }
 
 .space-header--active span {
   color: #0891b2;
+}
+
+.space-header-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  vertical-align: middle;
+  border-radius: 50%;
+  background: #ef4444;
 }
 
 .space-header span {
