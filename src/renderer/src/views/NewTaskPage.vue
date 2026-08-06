@@ -465,6 +465,26 @@ watch(lastAssistantContentLen, () => {
   if (!atBottom.value) return
   nextTick(scrollMessagesToBottom)
 })
+
+// ── 历史会话回显：切换会话后等消息加载完成滚到底部（修复残留上次滚动位置问题）──
+const echoPendingScroll = ref(false)
+
+watch(
+  () => agentStore.currentConversationId,
+  () => {
+    echoPendingScroll.value = true
+  }
+)
+
+watch(
+  () => currentMessages.value.length,
+  (len) => {
+    if (echoPendingScroll.value && len > 0) {
+      echoPendingScroll.value = false
+      nextTick(scrollMessagesToBottom)
+    }
+  }
+)
 </script>
 
 <template>
