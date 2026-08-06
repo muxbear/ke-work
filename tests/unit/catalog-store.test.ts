@@ -2,7 +2,7 @@
  * 单元测试：catalog store（「+」菜单数据与状态）
  * - 模式 radio 互斥
  * - 专家单选 + 最近使用（去重 / 置顶 / 上限 5）
- * - 技能多选切换
+ * - 技能多选切换（不持久化，随输入框会话状态）
  * - localStorage 持久化 round-trip 与坏数据回退
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -106,10 +106,19 @@ describe('catalog store: 技能多选', () => {
     store.toggleSkill(1)
     expect(store.selectedSkillIds).toEqual([2])
   })
+
+  it('clearSkills 清空全部技能', () => {
+    const store = useCatalogStore()
+    store.toggleSkill(1)
+    store.toggleSkill(2)
+    store.clearSkills()
+    expect(store.selectedSkillIds).toEqual([])
+    expect(store.selectedSkills).toEqual([])
+  })
 })
 
 describe('catalog store: 持久化', () => {
-  it('round-trip：重建 store 恢复 mode/专家/技能/最近使用', () => {
+  it('round-trip：重建 store 恢复 mode/专家/最近使用（技能不持久化）', () => {
     const store = useCatalogStore()
     store.setMode('local')
     store.setExpert(3)
@@ -120,8 +129,11 @@ describe('catalog store: 持久化', () => {
     const fresh = useCatalogStore()
     expect(fresh.mode).toBe('local')
     expect(fresh.selectedExpertId).toBe(3)
-    expect(fresh.selectedSkillIds).toEqual([1, 2])
+    expect(fresh.selectedSkillIds).toEqual([])
     expect(fresh.recentExpertIds).toEqual([3])
+    // 存储 JSON 不含技能字段
+    const persisted = JSON.parse(storage.get(STORAGE_KEY) ?? '{}') as Record<string, unknown>
+    expect(persisted).not.toHaveProperty('selectedSkillIds')
   })
 
   it('坏 JSON → 回退默认值', () => {
@@ -147,7 +159,8 @@ describe('catalog store: 持久化', () => {
     expect(store.mode).toBe('default')
     expect(store.selectedExpertId).toBeNull()
     expect(store.selectedExpertPrompt).toBe('')
-    expect(store.selectedSkillIds).toEqual([1])
+    // 技能字段不再解析：任何持久化数据下均为空
+    expect(store.selectedSkillIds).toEqual([])
     expect(store.recentExpertIds).toEqual([2, 3, 4, 5, 6]) // 去非法项 + 截断 5 之后是 [2,3,4,5,6]？→ slice(0,5) 后为 [2,3,4,5,6]
   })
 })

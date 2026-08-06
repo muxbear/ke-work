@@ -246,7 +246,6 @@ interface PersistedState {
   mode: Mode
   selectedExpertId: number | null
   selectedExpertPrompt: string
-  selectedSkillIds: number[]
   recentExpertIds: number[]
 }
 
@@ -254,7 +253,6 @@ const DEFAULT_STATE: PersistedState = {
   mode: 'default',
   selectedExpertId: null,
   selectedExpertPrompt: '',
-  selectedSkillIds: [],
   recentExpertIds: []
 }
 
@@ -292,11 +290,6 @@ function loadPersisted(): PersistedState {
     }
     if (typeof d.selectedExpertPrompt === 'string')
       out.selectedExpertPrompt = d.selectedExpertPrompt
-    if (Array.isArray(d.selectedSkillIds)) {
-      out.selectedSkillIds = d.selectedSkillIds.filter(
-        (n): n is number => typeof n === 'number' && Number.isInteger(n)
-      )
-    }
     if (Array.isArray(d.recentExpertIds)) {
       out.recentExpertIds = d.recentExpertIds
         .filter((n): n is number => typeof n === 'number' && Number.isInteger(n))
@@ -322,8 +315,8 @@ export const useCatalogStore = defineStore('catalog', () => {
   const selectedExpertId = ref<number | null>(loadPersisted().selectedExpertId)
   /** 插入输入框的专家提示词原文（切换/删除专家时用于移除） */
   const selectedExpertPrompt = ref<string>(loadPersisted().selectedExpertPrompt)
-  /** 已选技能 id（选择顺序即展示顺序） */
-  const selectedSkillIds = ref<number[]>(loadPersisted().selectedSkillIds)
+  /** 已选技能 id（选择顺序即展示顺序；不持久化，随输入框会话状态） */
+  const selectedSkillIds = ref<number[]>([])
   /** 最近使用专家 id（最近在前，上限 5） */
   const recentExpertIds = ref<number[]>(loadPersisted().recentExpertIds)
   /** 已挂载本地文件（任务级，不持久化） */
@@ -352,7 +345,6 @@ export const useCatalogStore = defineStore('catalog', () => {
       mode: mode.value,
       selectedExpertId: selectedExpertId.value,
       selectedExpertPrompt: selectedExpertPrompt.value,
-      selectedSkillIds: [...selectedSkillIds.value],
       recentExpertIds: [...recentExpertIds.value]
     })
   }
@@ -388,7 +380,7 @@ export const useCatalogStore = defineStore('catalog', () => {
     persist()
   }
 
-  /** 技能多选切换 */
+  /** 技能多选切换（不持久化，随输入框会话状态） */
   function toggleSkill(id: number): void {
     const idx = selectedSkillIds.value.indexOf(id)
     if (idx === -1) {
@@ -396,7 +388,11 @@ export const useCatalogStore = defineStore('catalog', () => {
     } else {
       selectedSkillIds.value = selectedSkillIds.value.filter((x) => x !== id)
     }
-    persist()
+  }
+
+  /** 清空全部技能（发送成功后调用） */
+  function clearSkills(): void {
+    selectedSkillIds.value = []
   }
 
   /** 追加本地文件（系统选择器选中后调用） */
@@ -454,6 +450,7 @@ export const useCatalogStore = defineStore('catalog', () => {
     setExpert,
     clearExpert,
     toggleSkill,
+    clearSkills,
     addLocalFiles,
     removeFile,
     gotoTab,
