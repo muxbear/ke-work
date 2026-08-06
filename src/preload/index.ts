@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 // Custom APIs for renderer
@@ -118,6 +118,26 @@ const api = {
   },
   readWorkspaceFile(workspaceId: string, relPath: string) {
     return ipcRenderer.invoke('workspace:read-file', workspaceId, relPath)
+  },
+  // ── 系统设置 API（机器级配置）──
+  /** 全局字体缩放（webFrame.setZoomFactor；渲染层不直接 import electron） */
+  setZoomFactor(ratio: number) {
+    webFrame.setZoomFactor(ratio)
+  },
+  getAllSettings() {
+    return ipcRenderer.invoke('config:get-all')
+  },
+  setSetting(key: string, value: unknown) {
+    return ipcRenderer.invoke('config:set', key, value)
+  },
+  getStorageStats() {
+    return ipcRenderer.invoke('config:storage-stats')
+  },
+  selectDefaultWorkspaceDir() {
+    return ipcRenderer.invoke('config:select-workspace-dir')
+  },
+  openDataDir() {
+    return ipcRenderer.invoke('config:open-data-dir')
   }
 }
 

@@ -128,13 +128,45 @@ export interface WorkspaceAPI {
   readWorkspaceFile(workspaceId: string, relPath: string): Promise<IpcResult<WorkspaceFileContent>>
 }
 
+/** ~/.ke-work 存储统计（config:storage-stats） */
+export interface StorageStats {
+  baseDir: string
+  usedBytes: number
+  diskTotal: number
+  diskFree: number
+  /** 统计超时降级（仅统计了部分目录） */
+  partial?: boolean
+}
+
+/** 系统设置快照（config:get-all；settings 为扁平 key 映射，meta 供 UI 显示真实值） */
+export interface SettingsSnapshot {
+  settings: Record<string, unknown>
+  meta: { dataBaseDir: string; workspaceBaseDir: string }
+}
+
+export interface ConfigAPI {
+  /** 全局字体缩放（webFrame.setZoomFactor 封装；渲染层不直接 import electron） */
+  setZoomFactor(ratio: number): void
+  /** 读取全部系统设置（默认值合并；机器级，不依赖登录态） */
+  getAllSettings(): Promise<IpcResult<SettingsSnapshot>>
+  /** 修改单项设置（主进程校验：白名单 + 类型/枚举/格式/区间；非法返回 error） */
+  setSetting(key: string, value: unknown): Promise<IpcResult<null>>
+  /** ~/.ke-work 目录占用真实统计 + 磁盘容量 */
+  getStorageStats(): Promise<IpcResult<StorageStats>>
+  /** 系统目录选择对话框；用户取消时 data 为 null */
+  selectDefaultWorkspaceDir(): Promise<IpcResult<string | null>>
+  /** 在系统资源管理器中打开 ~/.ke-work */
+  openDataDir(): Promise<IpcResult<null>>
+}
+
 /** 渲染层可见的完整 API 形状 */
 export interface KeWorkWindowApi
   extends AgentAPI,
     AuthAPI,
     ConversationAPI,
     ModeAPI,
-    WorkspaceAPI {}
+    WorkspaceAPI,
+    ConfigAPI {}
 
 declare global {
   interface Window {

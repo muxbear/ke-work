@@ -22,6 +22,7 @@ export class DataSourceFactory {
 
   private mode: WorkMode = 'local'
   private localDbPath = join(homedir(), '.ke-work', 'ke-work.db')
+  private localMigrationsDir: string | undefined
   private localDataSource: LocalDataSource | null = null
   private cloudDataSource: CloudDataSource | null = null
   private cloudBaseUrl = ''
@@ -42,8 +43,9 @@ export class DataSourceFactory {
   }
 
   /** 运行时配置（应用启动时调用） */
-  configure(options: { localDbPath?: string; cloudBaseUrl?: string }): void {
+  configure(options: { localDbPath?: string; localMigrationsDir?: string; cloudBaseUrl?: string }): void {
     if (options.localDbPath) this.localDbPath = options.localDbPath
+    if (options.localMigrationsDir) this.localMigrationsDir = options.localMigrationsDir
     if (options.cloudBaseUrl) this.cloudBaseUrl = options.cloudBaseUrl
   }
 
@@ -109,7 +111,7 @@ export class DataSourceFactory {
 
   private getLocalDataSource(): LocalDataSource {
     if (!this.localDataSource) {
-      this.localDataSource = new LocalDataSource(this.localDbPath)
+      this.localDataSource = new LocalDataSource(this.localDbPath, this.localMigrationsDir)
     }
     return this.localDataSource
   }

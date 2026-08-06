@@ -62,11 +62,30 @@ export interface WorkspaceServiceDeps {
  * 所有目录创建/校验集中在主进程，渲染层只传 id/name，防路径注入。
  */
 export class WorkspaceService {
+  private keWorkBaseDir: string
+
   constructor(
     private readonly repo: WorkspaceRepository,
-    private readonly keWorkBaseDir: string = join(homedir(), 'KeWork'),
+    keWorkBaseDir: string = join(homedir(), 'KeWork'),
     private readonly deps: WorkspaceServiceDeps = {}
-  ) {}
+  ) {
+    this.keWorkBaseDir = keWorkBaseDir
+  }
+
+  /**
+   * 修改工作空间基址（系统设置"默认工作空间存储路径"更改后调用）。
+   * 不迁移已有 workspaces 表记录与磁盘目录——仅影响新建工作空间的落点，
+   * 符合"修改后不影响已有数据"文案承诺。
+   */
+  setBaseDir(dir: string): void {
+    this.keWorkBaseDir = dir
+    console.log(`[workspace] base dir changed to: ${dir}`)
+  }
+
+  /** 当前生效的工作空间基址（供设置页/装配读取真实值） */
+  getBaseDir(): string {
+    return this.keWorkBaseDir
+  }
 
   /**
    * 当前用户的工作空间（含机器级共享的默认空间；默认空间记录/目录不存在时自动创建）

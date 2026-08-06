@@ -1,13 +1,21 @@
-import { app, shell, BrowserWindow, dialog, ipcMain, safeStorage } from 'electron'
+import {
+  app,
+  shell,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  safeStorage,
+  session as electronSession,
+  powerSaveBlocker
+} from 'electron'
 import { join } from 'path'
-import { homedir } from 'os'
 import { randomBytes, randomUUID } from 'crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { invokeSendMessage, toLangChainMessages, buildRegenerateInput } from './agent/service'
 import { summarizeTitle } from './agent/title-service'
 import { HumanMessage } from '@langchain/core/messages'
 import { detectOS } from './platform'
-import { getDataDirectory, initDataDirectory } from './data-dir'
+import { getDataDirectory, initDataDirectory, migrateLegacyConfigFiles } from './data-dir'
 import { WorkModeStore } from './mode/work-mode'
 import { DataSourceFactory } from './database/DataSourceFactory'
 import { AuthService } from './services/AuthService'
@@ -20,6 +28,12 @@ import { registerConversationHandlers } from './ipc/conversation-handlers'
 import { registerModeHandlers } from './ipc/mode-handlers'
 import { WorkspaceService } from './workspace/WorkspaceService'
 import { registerWorkspaceHandlers } from './ipc/workspace-handlers'
+import { MIGRATIONS_DIR } from './database/local/SqlMigrationRunner'
+import { SettingsStore } from './settings/SettingsStore'
+import { SettingsService, type ProxyMode } from './settings/SettingsService'
+import { registerConfigHandlers } from './ipc/config-handlers'
+import { LastLaunchStore } from './state/LastLaunchStore'
+import { WorkspaceStateStore } from './state/WorkspaceStateStore'
 
 import icon from '../../resources/icon.png?asset'
 
@@ -84,22 +98,26 @@ app.whenReady().then(() => {
   detectOS()
   initDataDirectory()
 
-  // ── 初始化工作模式 ──
+  // 旧布局 config/ → 顶层一次性迁移（对齐 WorkBuddy 顶层平铺；须在 WorkModeStore/SessionService 构造前）
   const dataDir = getDataDirectory()
-  const workModeStore = new WorkModeStore(dataDir.getDir('config'))
+  migrateLegacyConfigFiles(dataDir.getBaseDir())
+
+  // ── 初始化工作模式 ──
+  const workModeStore = new WorkModeStore(dataDir.getBaseDir())
   const mode = workModeStore.getMode()
 
   // ── 初始化数据源工厂 ──
   const dataSourceFactory = DataSourceFactory.getInstance()
   dataSourceFactory.configure({
     localDbPath: join(dataDir.getBaseDir(), 'ke-work.db'),
+    localMigrationsDir: join(dataDir.getBaseDir(), MIGRATIONS_DIR),
     cloudBaseUrl: process.env.CLOUD_API_BASE_URL ?? ''
   })
   dataSourceFactory.setMode(mode)
 
   // ── 初始化安全存储与 JWT 密钥 ──
   const secureStorage = new ElectronSafeStorage(
-    join(dataDir.getDir('config'), 'secrets.bin'),
+    join(dataDir.getBaseDir(), 'secrets.bin'),
     safeStorage
   )
   let jwtSecret = secureStorage.get('jwt-secret')
@@ -114,7 +132,7 @@ app.whenReady().then(() => {
     jwtSecret,
     secureStorage
   })
-  const session = new SessionService(dataDir.getDir('config'))
+  const session = new SessionService(dataDir.getBaseDir())
 
   // ── 注册认证 IPC ──
   registerAuthHandlers(ipcMain, { authService, dataSourceFactory, session, cancelAllAgents })
@@ -132,26 +150,82 @@ app.whenReady().then(() => {
   )
   registerConversationHandlers(ipcMain, { conversationStore, session })
 
-  // ── 工作空间服务（按登录用户隔离；目录创建/校验集中在主进程）──
-  // 工作空间目录基址为用户家目录 KeWork/（与 ~/.ke-work 应用数据目录不同）
-  const workspaceService = new WorkspaceService(
-    dataSourceFactory.createWorkspaceRepository(),
-    join(homedir(), 'KeWork'),
-    {
-      selectDir: async () => {
-        const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
-        const result = win
-          ? await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
-          : await dialog.showOpenDialog({ properties: ['openDirectory'] })
-        return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
-      },
-      openPath: async (p) => {
-        const err = await shell.openPath(p)
-        if (err) throw new Error(err)
+  // ── 系统设置服务（代理/锁屏/目录依赖在此注入；机器级配置，不依赖登录态）──
+  const applyProxy = async (mode: string, url: string): Promise<void> => {
+    await electronSession.defaultSession.setProxy(
+      mode === 'direct'
+        ? { mode: 'direct' }
+        : mode === 'system'
+          ? { mode: 'system' }
+          : { mode: 'fixed_servers', proxyRules: url }
+    )
+    console.log(`[settings] proxy applied: mode=${mode}`)
+  }
+  let lockScreenEnabled = false
+  let lockBlockerId: number | null = null
+  const setLockScreen = (enabled: boolean): void => {
+    if (enabled === lockScreenEnabled) return
+    lockScreenEnabled = enabled
+    if (enabled) {
+      lockBlockerId ??= powerSaveBlocker.start('prevent-display-sleep')
+      console.log('[settings] lock-screen keep-awake enabled')
+    } else {
+      if (lockBlockerId != null) {
+        powerSaveBlocker.stop(lockBlockerId)
+        lockBlockerId = null
       }
+      console.log('[settings] lock-screen keep-awake disabled')
     }
+  }
+  const selectDir = async (): Promise<string | null> => {
+    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+    const result = win
+      ? await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
+      : await dialog.showOpenDialog({ properties: ['openDirectory'] })
+    return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
+  }
+  const openPath = async (p: string): Promise<void> => {
+    const err = await shell.openPath(p)
+    if (err) throw new Error(err)
+  }
+
+  const settingsStore = new SettingsStore(dataDir.getBaseDir())
+  let workspaceService: WorkspaceService
+  const settingsService = new SettingsService(settingsStore, dataDir.getBaseDir(), {
+    applyProxy: applyProxy as (mode: ProxyMode, url: string) => Promise<void>,
+    setLockScreen,
+    selectDir,
+    openPath,
+    onWorkspaceBaseDirChange: (dir) => workspaceService.setBaseDir(dir)
+  })
+  const initialSettings = settingsService.getAll()
+
+  // ── 工作空间服务（按登录用户隔离；目录创建/校验集中在主进程）──
+  // 工作空间目录基址默认用户家目录 KeWork/（与 ~/.ke-work 应用数据目录不同）；可由系统设置更改
+  workspaceService = new WorkspaceService(
+    dataSourceFactory.createWorkspaceRepository(),
+    initialSettings.meta.workspaceBaseDir,
+    { selectDir, openPath }
   )
   registerWorkspaceHandlers(ipcMain, { workspaceService, session })
+
+  // ── 启动时应用设置（窗口创建前；顺序：工作空间基址 → 代理 → 锁屏）──
+  void applyProxy(
+    initialSettings.settings['network.proxyMode'] as string,
+    initialSettings.settings['network.proxyUrl'] as string
+  ).catch((err) => console.warn('[settings] apply proxy on startup failed:', err))
+  setLockScreen(initialSettings.settings['lockScreen.remoteLock'] === true)
+
+  // ── 启动快照与工作区状态（对齐 WorkBuddy last-launch.json / workspace-state.json）──
+  new LastLaunchStore(dataDir.getBaseDir()).setLaunch({
+    version: app.getVersion(),
+    build: '',
+    timestamp: new Date().toISOString()
+  })
+  new WorkspaceStateStore(dataDir.getBaseDir())
+
+  // ── 注册系统设置 IPC（机器级，不调 requireUserId）──
+  registerConfigHandlers(ipcMain, { settingsService })
 
   // 打开默认工作目录（~/.ke-work/workspace；未绑定工作空间的会话使用）
   ipcMain.handle('workspace:open-default', async () => {
