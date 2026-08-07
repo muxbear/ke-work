@@ -26,6 +26,9 @@ const expanded = ref<Record<string, ExpandedDir>>({})
 const rootLoading = ref(false)
 const rootError = ref('')
 
+/** 根条目：目录先行 + 保持主进程返回顺序 */
+const rootEntries = ref<WorkspaceFileEntry[]>([])
+
 // 根目录切换（工作空间变化 / 返回根）时重置
 watch(
   () => [props.workspaceId, props.rootPath],
@@ -36,9 +39,6 @@ watch(
   },
   { immediate: true }
 )
-
-/** 根条目：目录先行 + 保持主进程返回顺序 */
-const rootEntries = ref<WorkspaceFileEntry[]>([])
 
 async function loadRoot(): Promise<void> {
   rootLoading.value = true
