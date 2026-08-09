@@ -185,12 +185,11 @@ watch(panelWorkspaceId, () => {
 // ── 拖拽分割线（调整右栏宽度；localStorage 持久化）──
 const PANEL_WIDTH_KEY = 'ke-work.panel-width'
 const PANEL_WIDTH_MIN = 240
-const panelWidth = ref(Number(localStorage.getItem(PANEL_WIDTH_KEY)) || 300)
+const initialWidth = Number(localStorage.getItem(PANEL_WIDTH_KEY)) || 300
+const panelWidth = ref(
+  Math.min(Math.min(600, window.innerWidth * 0.6), Math.max(PANEL_WIDTH_MIN, initialWidth))
+)
 const dragging = ref(false)
-
-watch(panelWidth, (w) => {
-  localStorage.setItem(PANEL_WIDTH_KEY, String(w))
-})
 
 /** 拖拽分割线：mousedown 后跟随鼠标，钳制 [240, min(600, 60% 窗口)]；全屏态禁用 */
 function startDrag(e: MouseEvent): void {
@@ -203,6 +202,7 @@ function startDrag(e: MouseEvent): void {
   }
   const onUp = (): void => {
     dragging.value = false
+    localStorage.setItem(PANEL_WIDTH_KEY, String(panelWidth.value))
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onUp)
   }
