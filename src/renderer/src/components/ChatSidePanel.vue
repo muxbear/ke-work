@@ -239,20 +239,7 @@ const expandPanel = (): void => {
     <!-- 顶部按钮栏：收起态只显示展开按钮 -->
     <div class="csp-topbar">
       <template v-if="open">
-        <!-- 文件标签条（与「收起右栏」按钮同行） -->
-        <div v-if="fileTabs.length" class="csp-tabs">
-          <button
-            v-for="tab in fileTabs"
-            :key="tab.key"
-            :class="['csp-tab', { 'csp-tab--active': tab.key === activeTabKey }]"
-            :title="tab.entry.relPath"
-            @click="activateTab(tab.key)"
-          >
-            <span class="csp-tab-name">{{ tab.entry.name }}</span>
-            <span class="csp-tab-close" title="关闭" @click.stop="closeTab(tab.key)">×</span>
-          </button>
-        </div>
-        <!-- 视图切换（网格图标 + 下拉菜单；与「全屏」按钮同行） -->
+        <!-- 视图切换（网格图标 + 下拉菜单；靠左对齐） -->
         <div class="csp-view-wrap" data-view-menu-trigger>
           <button
             class="csp-icon-btn csp-view-trigger"
@@ -289,6 +276,19 @@ const expandPanel = (): void => {
               </button>
             </div>
           </Transition>
+        </div>
+        <!-- 文件标签条（与「收起右栏」按钮同行） -->
+        <div v-if="fileTabs.length" class="csp-tabs">
+          <button
+            v-for="tab in fileTabs"
+            :key="tab.key"
+            :class="['csp-tab', { 'csp-tab--active': tab.key === activeTabKey }]"
+            :title="tab.entry.relPath"
+            @click="activateTab(tab.key)"
+          >
+            <span class="csp-tab-name">{{ tab.entry.name }}</span>
+            <span class="csp-tab-close" title="关闭" @click.stop="closeTab(tab.key)">×</span>
+          </button>
         </div>
         <button class="csp-icon-btn" :title="fullscreen ? '退出全屏' : '全屏'" @click="toggleFullscreen">
           <svg v-if="!fullscreen" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
