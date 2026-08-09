@@ -135,10 +135,7 @@ const renderedHtml = computed(() =>
   white-space: pre-wrap;
   word-break: break-all;
 }
-</style>
 
-<style>
-/* 非 scoped：v-html 渲染的 markdown 内容无 scoped 属性，需全局规则 */
 .fp-body .message-content {
   padding: 12px 16px;
 }
