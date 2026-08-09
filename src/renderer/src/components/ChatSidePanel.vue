@@ -538,6 +538,18 @@ const expandPanel = (): void => {
   flex-shrink: 0;
 }
 
+/* 下拉菜单滑出过渡 */
+.dropdown-enter-active,
+.dropdown-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.dropdown-enter-from,
+.dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
 /* 视图体 */
 .csp-body {
   flex: 1;
