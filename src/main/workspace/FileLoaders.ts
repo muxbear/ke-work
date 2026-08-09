@@ -23,9 +23,12 @@ const BINARY_SNIFF_BYTES = 4 * 1024
 
 /** pptx slide XML：段落与文本 run */
 const A_P_REGEX = /<a:p[\s\S]*?<\/a:p>/g
-const A_T_REGEX = /<a:t[^>]*>([\s\S]*?)<\/a:t>/g
+const A_T_REGEX = /<a:t[^>]*>[\s\S]*?<\/a:t>/g
 
-/** 最小 XML 实体反转义（OOXML 文本中的 &amp; 等） */
+/**
+ * 最小 XML 实体反转义（OOXML 文本中的 &amp; 等）。
+ * 仅处理常用命名实体，预览用最小集，其余实体保持原样。
+ */
 function unescapeXml(s: string): string {
   return s
     .replace(/&lt;/g, '<')
@@ -41,19 +44,25 @@ function truncateText(text: string): LoadedText {
   return { content: text.slice(0, MAX_TEXT_CHARS), truncated: true }
 }
 
+/** 二进制文档原始文件不得超过 20MB */
+function assertNotTooBig(filePath: string): void {
+  if (statSync(filePath).size > MAX_BINARY_BYTES) throw new Error('文件过大，暂不支持预览')
+}
+
 /** 二进制文档原始字节（含 20MB 上限） */
 function readBytes(filePath: string): Buffer {
-  if (statSync(filePath).size > MAX_BINARY_BYTES) throw new Error('文件过大，暂不支持预览')
+  assertNotTooBig(filePath)
   return readFileSync(filePath)
 }
 
 async function loadDocx(filePath: string): Promise<LoadedText> {
-  if (statSync(filePath).size > MAX_BINARY_BYTES) throw new Error('文件过大，暂不支持预览')
+  assertNotTooBig(filePath)
   const { value } = await extractRawText({ path: filePath })
   return truncateText(value)
 }
 
 async function loadXlsx(filePath: string): Promise<LoadedText> {
+  assertNotTooBig(filePath)
   const workbook = XLSX.readFile(filePath)
   const parts = workbook.SheetNames.map((name) => {
     const csv = XLSX.utils.sheet_to_csv(workbook.Sheets[name])
