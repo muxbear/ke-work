@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import QRCode from 'qrcode'
 import { useAgentStore } from '@store/agent'
 import { useWorkspaceStore } from '@store/workspace'
 import MessageContent from '@components/MessageContent.vue'
@@ -171,7 +172,9 @@ const onInputSync = (): void => {
   taskInput.value = el.innerText
   // 对账：DOM 中不存在的 token 从勾选中移除（退格键/选择删除路径）
   const domIds = new Set(
-    Array.from(el.querySelectorAll<HTMLElement>('.skill-token')).map((t) => Number(t.dataset.skillId))
+    Array.from(el.querySelectorAll<HTMLElement>('.skill-token')).map((t) =>
+      Number(t.dataset.skillId)
+    )
   )
   for (const id of [...catalog.selectedSkillIds]) {
     if (!domIds.has(id)) catalog.toggleSkill(id)
@@ -393,14 +396,104 @@ const toggleSpeak = (msg: { id: string; content: string }): void => {
   }, 1500)
 }
 
-/** 分享会话：全部消息拼文本复制 */
-const shareConversation = (): void => {
-  const text = messages.value
+// ── 分享选择模式 ──
+/** 分享面板开启：每条消息左侧出现复选框，底部出现操作面板 */
+const shareMode = ref(false)
+const shareSelected = ref<string[]>([])
+
+const shareAllChecked = computed(
+  () => messages.value.length > 0 && shareSelected.value.length === messages.value.length
+)
+const shareAllIndeterminate = computed(
+  () => shareSelected.value.length > 0 && shareSelected.value.length < messages.value.length
+)
+
+const isShareSelected = (id: string): boolean => shareSelected.value.includes(id)
+
+const toggleShareSelected = (id: string): void => {
+  const i = shareSelected.value.indexOf(id)
+  if (i >= 0) shareSelected.value.splice(i, 1)
+  else shareSelected.value.push(id)
+}
+
+/** 全选/取消全选（收敛为方法，避免模板内多语句表达式） */
+const toggleShareAll = (): void => {
+  shareSelected.value = shareAllChecked.value ? [] : messages.value.map((m) => m.id)
+}
+
+/** 打开分享面板（同时收起对话内搜索，避免视觉叠加） */
+const openSharePanel = (): void => {
+  closeSearch()
+  shareMode.value = true
+}
+
+/** 关闭分享面板并清空选中（收敛为方法，避免模板内多语句表达式） */
+const closeSharePanel = (): void => {
+  shareMode.value = false
+  shareSelected.value = []
+}
+
+/** 分享链接：本地自定义协议（未来云端模式可切换 https 分享服务地址） */
+const shareLink = computed(
+  () => `kework://conversation/${agentStore.currentConversationId ?? 'new'}`
+)
+
+/** 选中消息拼文本（用户/AI 前缀，过滤空内容） */
+const shareSelectedText = (): string =>
+  messages.value
+    .filter((m) => shareSelected.value.includes(m.id))
     .map((m) => (m.role === 'user' ? `[用户] ${m.content}` : `[AI] ${m.content}`))
     .filter((t) => t.trim().length > 0)
     .join('\n\n')
-  if (!text) return
-  copyText(text, '会话内容已复制')
+
+/** 分享到微信：复制选中对话文本，由用户粘贴到微信发送 */
+const shareToWechat = (): void => {
+  const text = shareSelectedText()
+  if (!text) return showToast('请先选择要分享的消息')
+  copyText(text, '已复制，请在微信中粘贴分享')
+}
+
+/** 分享到朋友圈：同微信，复制文本 */
+const shareToMoments = (): void => {
+  const text = shareSelectedText()
+  if (!text) return showToast('请先选择要分享的消息')
+  copyText(text, '已复制，请在朋友圈中粘贴分享')
+}
+
+/** 复制分享链接 */
+const copyShareLink = (): void => {
+  copyText(shareLink.value, '分享链接已复制')
+}
+
+/** 浏览器打开分享链接（本地自定义协议，未注册时由系统提示） */
+const openShareInBrowser = (): void => {
+  window.api.openExternal(shareLink.value)
+}
+
+// ── 分享二维码 ──
+const qrModalOpen = ref(false)
+const qrDataUrl = ref('')
+const qrGenerating = ref(false)
+
+/** 生成分享链接二维码并弹出展示 */
+const generateQr = async (): Promise<void> => {
+  qrModalOpen.value = true
+  qrGenerating.value = true
+  qrDataUrl.value = ''
+  try {
+    qrDataUrl.value = await QRCode.toDataURL(shareLink.value, { width: 240, margin: 1 })
+  } catch (err) {
+    console.error('[share] 二维码生成失败:', err)
+    qrDataUrl.value = ''
+  } finally {
+    qrGenerating.value = false
+  }
+}
+
+/** 关闭二维码弹窗（收敛为方法，避免模板内多语句表达式） */
+const closeQrModal = (): void => {
+  qrModalOpen.value = false
+  qrDataUrl.value = ''
 }
 
 // ── 格式化工具 ──
@@ -1307,6 +1400,81 @@ watch(
         <header class="chat-header">
           <h1 class="chat-header-title">{{ agentStore.currentConversation?.title ?? '新对话' }}</h1>
           <div class="chat-header-actions">
+            <!-- 对话内搜索条：浮层出现在"对话内搜索"图标左侧 -->
+            <Transition name="searchbar">
+              <div v-if="searchOpen" class="chat-search-bar">
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.3-4.3" />
+                </svg>
+                <input
+                  v-model="searchKeyword"
+                  class="chat-search-input"
+                  placeholder="搜索当前对话"
+                />
+                <span class="chat-search-count"
+                  >{{ searchMatches.length ? searchIndex + 1 : 0 }}/{{ searchMatches.length }}</span
+                >
+                <button
+                  class="chat-search-btn"
+                  title="上一条"
+                  :disabled="!searchMatches.length"
+                  @click="gotoSearch(-1)"
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  >
+                    <polyline points="18 15 12 9 6 15" />
+                  </svg>
+                </button>
+                <button
+                  class="chat-search-btn"
+                  title="下一条"
+                  :disabled="!searchMatches.length"
+                  @click="gotoSearch(1)"
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+                <button class="chat-search-btn" title="关闭" @click="closeSearch">
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            </Transition>
             <button
               class="chat-header-btn"
               title="对话内搜索"
@@ -1326,7 +1494,12 @@ watch(
                 <path d="m21 21-4.3-4.3" />
               </svg>
             </button>
-            <button class="chat-header-btn" title="分享" @click="shareConversation">
+            <button
+              class="chat-header-btn"
+              title="分享"
+              :class="{ 'chat-header-btn--active': shareMode }"
+              @click="openSharePanel"
+            >
               <svg
                 width="15"
                 height="15"
@@ -1385,78 +1558,6 @@ watch(
           </div>
         </header>
 
-        <!-- 对话内搜索条 -->
-        <Transition name="dropdown">
-          <div v-if="searchOpen" class="chat-search-bar">
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
-            <input v-model="searchKeyword" class="chat-search-input" placeholder="搜索当前对话" />
-            <span class="chat-search-count"
-              >{{ searchMatches.length ? searchIndex + 1 : 0 }}/{{ searchMatches.length }}</span
-            >
-            <button
-              class="chat-search-btn"
-              title="上一条"
-              :disabled="!searchMatches.length"
-              @click="gotoSearch(-1)"
-            >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-              >
-                <polyline points="18 15 12 9 6 15" />
-              </svg>
-            </button>
-            <button
-              class="chat-search-btn"
-              title="下一条"
-              :disabled="!searchMatches.length"
-              @click="gotoSearch(1)"
-            >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-              >
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </button>
-            <button class="chat-search-btn" title="关闭" @click="closeSearch">
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-              >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          </div>
-        </Transition>
-
         <div ref="messagesScrollRef" class="chat-messages" @scroll="updateScrollState">
           <div
             v-for="msg in messages"
@@ -1465,9 +1566,38 @@ watch(
             :class="[
               'chat-bubble-row',
               msg.role === 'user' ? 'chat-bubble-row--user' : 'chat-bubble-row--assistant',
-              { 'chat-msg--hit': hitSet.has(msg.id), 'chat-msg--current': currentHitId === msg.id }
+              {
+                'chat-msg--hit': hitSet.has(msg.id),
+                'chat-msg--current': currentHitId === msg.id,
+                'chat-msg-row--selected': isShareSelected(msg.id)
+              }
             ]"
           >
+            <!-- 分享选择模式：消息最左侧复选框 -->
+            <label
+              v-if="shareMode"
+              class="chat-msg-check"
+              :class="{ 'chat-msg-check--selected': isShareSelected(msg.id) }"
+              :title="isShareSelected(msg.id) ? '取消选中' : '选中该消息'"
+              @click.prevent="toggleShareSelected(msg.id)"
+            >
+              <input type="checkbox" :checked="isShareSelected(msg.id)" />
+              <span class="chat-msg-check-box">
+                <svg
+                  v-if="isShareSelected(msg.id)"
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="white"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </span>
+            </label>
             <!-- AI 回复：头像+名字在顶部，正文无背景色，底部操作栏 -->
             <template v-if="msg.role === 'assistant'">
               <div class="chat-bubble-head">
@@ -1711,6 +1841,144 @@ watch(
             <polyline points="18 15 12 9 6 15" />
           </svg>
         </button>
+        <!-- 分享面板：底部、输入栏上方，全选 + 5 个分享动作 + 关闭 -->
+        <Transition name="share-panel">
+          <div v-if="shareMode" class="share-panel">
+            <label class="share-select-all" @click.prevent="toggleShareAll">
+              <input type="checkbox" :checked="shareAllChecked" />
+              <span
+                class="share-select-all-box"
+                :class="{ 'share-select-all-box--indeterminate': shareAllIndeterminate }"
+              >
+                <svg
+                  v-if="shareAllChecked"
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="white"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span v-else-if="shareAllIndeterminate" class="share-select-all-line"></span>
+              </span>
+              <span class="share-select-all-text"
+                >全选 ({{ shareSelected.length }}/{{ messages.length }})</span
+              >
+            </label>
+            <div class="share-panel-divider"></div>
+            <button class="share-action" title="分享到微信" @click="shareToWechat">
+              <span class="share-action-icon share-action-icon--wechat">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                >
+                  <path
+                    d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"
+                  />
+                </svg>
+              </span>
+              <span class="share-action-text">分享到微信</span>
+            </button>
+            <button class="share-action" title="分享到朋友圈" @click="shareToMoments">
+              <span class="share-action-icon share-action-icon--moments">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="1.2" fill="currentColor" />
+                  <path d="M12 2v4.5M12 17.5V22M2 12h4.5M17.5 12H22" />
+                </svg>
+              </span>
+              <span class="share-action-text">分享到朋友圈</span>
+            </button>
+            <button class="share-action" title="复制链接" @click="copyShareLink">
+              <span class="share-action-icon share-action-icon--link">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                >
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                </svg>
+              </span>
+              <span class="share-action-text">复制链接</span>
+            </button>
+            <button class="share-action" title="生成二维码" @click="generateQr">
+              <span class="share-action-icon share-action-icon--qr">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                >
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <path d="M14 14h3v3h-3zM21 14v3M14 21h3" />
+                </svg>
+              </span>
+              <span class="share-action-text">生成二维码</span>
+            </button>
+            <button class="share-action" title="浏览器打开" @click="openShareInBrowser">
+              <span class="share-action-icon share-action-icon--browser">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M2 12h20" />
+                  <path
+                    d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
+                  />
+                </svg>
+              </span>
+              <span class="share-action-text">浏览器打开</span>
+            </button>
+            <div class="share-panel-spacer"></div>
+            <button class="share-close" title="关闭" @click="closeSharePanel">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        </Transition>
         <!-- Compact input -->
         <div class="chat-input-bar">
           <div class="chat-input-card">
@@ -1765,7 +2033,10 @@ watch(
                 </svg>
               </button>
               <div v-if="catalog.selectedExpert" class="expert-chip" @click="removeExpert">
-                <span class="expert-chip-avatar" :style="{ background: catalog.selectedExpert.color }">
+                <span
+                  class="expert-chip-avatar"
+                  :style="{ background: catalog.selectedExpert.color }"
+                >
                   <span class="expert-chip-avatar-text">{{ catalog.selectedExpert.initials }}</span>
                   <svg
                     class="expert-chip-avatar-del"
@@ -1836,6 +2107,33 @@ watch(
             </div>
           </div>
         </div>
+        <!-- 分享二维码模态框 -->
+        <Transition name="dropdown">
+          <div v-if="qrModalOpen" class="qr-modal-mask" @click.self="closeQrModal">
+            <div class="qr-modal">
+              <button class="qr-modal-close" title="关闭" @click="closeQrModal">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+              <p class="qr-modal-title">扫码打开分享链接</p>
+              <div class="qr-modal-body">
+                <img v-if="qrDataUrl" :src="qrDataUrl" alt="分享二维码" class="qr-modal-img" />
+                <div v-else class="qr-modal-loading">二维码生成中…</div>
+              </div>
+              <p class="qr-modal-link">{{ shareLink }}</p>
+            </div>
+          </div>
+        </Transition>
       </div>
       <ChatSidePanel v-model:fullscreen="panelFullscreen" />
     </div>
@@ -2721,6 +3019,7 @@ watch(
 }
 
 .chat-bubble-row {
+  position: relative;
   display: flex;
   gap: 12px;
   align-items: flex-start;
@@ -2735,6 +3034,58 @@ watch(
 
 .chat-msg--current {
   background: #fef3c7;
+}
+
+/* 分享选择模式：选中消息行高亮 */
+.chat-msg-row--selected {
+  background: rgba(8, 145, 178, 0.06);
+}
+
+/* 分享选择模式：行内出现复选框时左侧让位（:has 兼容 Electron 39 / Chromium 高版本） */
+.chat-bubble-row:has(.chat-msg-check) {
+  padding-left: 26px;
+}
+
+/* 消息行复选框（分享选择模式下显示，位于每条消息最左侧） */
+.chat-msg-check {
+  position: absolute;
+  left: 0;
+  top: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.chat-msg-check input {
+  display: none;
+}
+
+.chat-msg-check-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  box-sizing: border-box;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.chat-msg-check:hover .chat-msg-check-box {
+  border-color: #0891b2;
+}
+
+.chat-msg-check--selected .chat-msg-check-box {
+  background: #0891b2;
+  border-color: #0891b2;
 }
 
 .chat-bubble-row--user {
@@ -2940,6 +3291,7 @@ watch(
    Chat Header（会话标题栏）
    ═══════════════════════════════════════════════════════════════════════════ */
 .chat-header {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3074,15 +3426,23 @@ watch(
   text-align: center;
 }
 
-/* 对话内搜索条 */
+/* 对话内搜索条：header 内浮层，出现在"对话内搜索"图标左侧
+   （right 相对 header padding box：3 个按钮 × 30px + 2 个间距 × 2px + 右侧 padding 24px + 6px 留白） */
 .chat-search-bar {
+  position: absolute;
+  top: 50%;
+  right: calc(30px * 3 + 2px * 2 + 24px + 6px);
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 24px;
-  border-bottom: 1px solid rgba(8, 145, 178, 0.08);
-  background: #fbfdfe;
-  flex-shrink: 0;
+  width: 320px;
+  padding: 6px 10px;
+  border: 1px solid rgba(8, 145, 178, 0.18);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.1);
+  z-index: 30;
   color: #9ca3af;
 }
 
@@ -3133,6 +3493,278 @@ watch(
 .chat-search-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* 搜索条浮层过渡：仅淡入淡出（浮层本身有 translateY(-50%) 定位，不做位移过渡） */
+.searchbar-enter-active,
+.searchbar-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.searchbar-enter-from,
+.searchbar-leave-to {
+  opacity: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Share Panel（底部分享面板）
+   ═══════════════════════════════════════════════════════════════════════════ */
+.share-panel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(8, 145, 178, 0.18);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.08);
+  flex-shrink: 0;
+}
+
+.share-select-all {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.share-select-all:hover {
+  background: rgba(8, 145, 178, 0.06);
+}
+
+.share-select-all input {
+  display: none;
+}
+
+.share-select-all-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  box-sizing: border-box;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.share-select-all-box--indeterminate {
+  border-color: #0891b2;
+}
+
+.share-select-all-line {
+  width: 8px;
+  height: 2px;
+  border-radius: 1px;
+  background: #0891b2;
+}
+
+.share-select-all-text {
+  font-size: 12px;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.share-panel-divider {
+  width: 1px;
+  height: 20px;
+  background: #e5e7eb;
+  margin: 0 6px;
+  flex-shrink: 0;
+}
+
+.share-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.share-action:hover {
+  background: rgba(8, 145, 178, 0.08);
+}
+
+.share-action-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: #ffffff;
+}
+
+.share-action-icon--wechat {
+  background: #10b981;
+}
+
+.share-action-icon--moments {
+  background: #059669;
+}
+
+.share-action-icon--link {
+  background: #0891b2;
+}
+
+.share-action-icon--qr {
+  background: #7c3aed;
+}
+
+.share-action-icon--browser {
+  background: #6366f1;
+}
+
+.share-action-text {
+  font-size: 11px;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.share-panel-spacer {
+  flex: 1;
+}
+
+.share-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #f3f4f6;
+  color: #6b7280;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.share-close:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+/* 分享面板过渡 */
+.share-panel-enter-active,
+.share-panel-leave-active {
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.share-panel-enter-from,
+.share-panel-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Share QR Modal（分享二维码模态框）
+   ═══════════════════════════════════════════════════════════════════════════ */
+.qr-modal-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.qr-modal {
+  position: relative;
+  width: 300px;
+  padding: 20px;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.18);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.qr-modal-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #f3f4f6;
+  color: #6b7280;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.qr-modal-close:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.qr-modal-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a2332;
+}
+
+.qr-modal-body {
+  width: 240px;
+  height: 240px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.qr-modal-img {
+  width: 240px;
+  height: 240px;
+  display: block;
+}
+
+.qr-modal-loading {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.qr-modal-link {
+  margin: 0;
+  max-width: 260px;
+  font-size: 11px;
+  color: #6b7f95;
+  word-break: break-all;
+  text-align: center;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

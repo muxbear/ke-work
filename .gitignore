@@ -9,4 +9,5 @@ out
 .eslintcache
 *.log*
 .env
+.CLAUDE.md
 coverage
