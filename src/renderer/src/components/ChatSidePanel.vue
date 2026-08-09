@@ -27,7 +27,20 @@ interface Selection {
   truncated: boolean
   loading?: boolean
 }
-const filesSelection = ref<Selection | null>(null)
+
+/** 文件标签页（工作空间文件视图；顶栏标签条展示） */
+interface FileTab {
+  key: string // relPath，同文件去重键
+  entry: WorkspaceFileEntry
+  content: string
+  truncated: boolean
+  loading: boolean
+  error: string
+}
+const fileTabs = ref<FileTab[]>([])
+const activeTabKey = ref<string | null>(null)
+const activeTab = computed(() => fileTabs.value.find((t) => t.key === activeTabKey.value) ?? null)
+
 const artifactsSelection = ref<Selection | null>(null)
 
 const viewLabels: Record<ViewKey, string> = {
@@ -93,15 +106,46 @@ onUnmounted(() => {
   document.removeEventListener('mousedown', handleDocumentClick)
 })
 
-// ── 文件打开（工作空间文件视图 / 产物区共用）──
-async function openFile(entry: WorkspaceFileEntry, target: 'files' | 'artifacts'): Promise<void> {
-  const selection = target === 'files' ? filesSelection : artifactsSelection
-  selection.value = { entry, content: '', truncated: false, loading: true }
+/** 文件树点击：已开标签则激活，否则新建标签并读取内容 */
+async function openFile(entry: WorkspaceFileEntry): Promise<void> {
+  if (fileTabs.value.some((t) => t.key === entry.relPath)) {
+    activeTabKey.value = entry.relPath
+    return
+  }
+  fileTabs.value.push({
+    key: entry.relPath,
+    entry,
+    content: '',
+    truncated: false,
+    loading: true,
+    error: ''
+  })
+  activeTabKey.value = entry.relPath
   try {
     const result = await workspaceStore.readFile(panelWorkspaceId.value!, entry.relPath)
-    selection.value = { entry, content: result.content, truncated: result.truncated }
+    const tab = fileTabs.value.find((t) => t.key === entry.relPath)
+    if (tab) {
+      tab.content = result.content
+      tab.truncated = result.truncated
+      tab.loading = false
+    }
   } catch (err) {
-    selection.value = {
+    const tab = fileTabs.value.find((t) => t.key === entry.relPath)
+    if (tab) {
+      tab.error = err instanceof Error ? err.message : '读取失败'
+      tab.loading = false
+    }
+  }
+}
+
+/** 产物区：保持旧的内联预览行为（不接入标签页） */
+async function openArtifactFile(entry: WorkspaceFileEntry): Promise<void> {
+  artifactsSelection.value = { entry, content: '', truncated: false, loading: true }
+  try {
+    const result = await workspaceStore.readFile(panelWorkspaceId.value!, entry.relPath)
+    artifactsSelection.value = { entry, content: result.content, truncated: result.truncated }
+  } catch (err) {
+    artifactsSelection.value = {
       entry,
       content: `读取失败：${err instanceof Error ? err.message : '未知错误'}`,
       truncated: false
@@ -109,17 +153,29 @@ async function openFile(entry: WorkspaceFileEntry, target: 'files' | 'artifacts'
   }
 }
 
-function closeFilesSelection(): void {
-  filesSelection.value = null
+function activateTab(key: string): void {
+  activeTabKey.value = key
+}
+
+/** 关闭标签：关闭激活标签时激活相邻（优先右侧），全部关闭回到文件树 */
+function closeTab(key: string): void {
+  const idx = fileTabs.value.findIndex((t) => t.key === key)
+  if (idx === -1) return
+  fileTabs.value.splice(idx, 1)
+  if (activeTabKey.value === key) {
+    const next = fileTabs.value[idx] ?? fileTabs.value[idx - 1]
+    activeTabKey.value = next ? next.key : null
+  }
 }
 
 function closeArtifactsSelection(): void {
   artifactsSelection.value = null
 }
 
-// 工作空间切换时清空选中
+// 工作空间切换时清空标签与选中
 watch(panelWorkspaceId, () => {
-  filesSelection.value = null
+  fileTabs.value = []
+  activeTabKey.value = null
   artifactsSelection.value = null
   artifactsOpen.value = false
 })
@@ -148,6 +204,19 @@ const expandPanel = (): void => {
     <!-- 顶部按钮栏：收起态只显示展开按钮 -->
     <div class="csp-topbar">
       <template v-if="open">
+        <!-- 文件标签条（与「收起右栏」按钮同行） -->
+        <div v-if="fileTabs.length" class="csp-tabs">
+          <button
+            v-for="tab in fileTabs"
+            :key="tab.key"
+            :class="['csp-tab', { 'csp-tab--active': tab.key === activeTabKey }]"
+            :title="tab.entry.relPath"
+            @click="activateTab(tab.key)"
+          >
+            <span class="csp-tab-name">{{ tab.entry.name }}</span>
+            <span class="csp-tab-close" title="关闭" @click.stop="closeTab(tab.key)">×</span>
+          </button>
+        </div>
         <button class="csp-icon-btn" :title="fullscreen ? '退出全屏' : '全屏'" @click="toggleFullscreen">
           <svg v-if="!fullscreen" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="2" stroke-linecap="round">
@@ -229,12 +298,20 @@ const expandPanel = (): void => {
 
       <!-- 工作空间文件 -->
       <template v-else-if="view === 'files'">
-        <div v-if="filesSelection" class="csp-view-body">
-          <FilePreview :name="filesSelection.entry.name" :rel-path="filesSelection.entry.relPath"
-            :content="filesSelection.content" :truncated="filesSelection.truncated" @back="closeFilesSelection" />
+        <div v-if="activeTab" class="csp-view-body">
+          <p v-if="activeTab.loading" class="csp-empty-tip">加载中…</p>
+          <p v-else-if="activeTab.error" class="csp-load-error">{{ activeTab.error }}</p>
+          <FilePreview
+            v-else
+            :name="activeTab.entry.name"
+            :rel-path="activeTab.entry.relPath"
+            :content="activeTab.content"
+            :truncated="activeTab.truncated"
+            :show-back="false"
+          />
         </div>
         <div v-else-if="panelWorkspaceId" class="csp-view-body">
-          <FileList :workspace-id="panelWorkspaceId" @open-file="(e) => openFile(e, 'files')" />
+          <FileList :workspace-id="panelWorkspaceId" @open-file="openFile" />
         </div>
         <p v-else class="csp-empty-tip">未选择工作空间</p>
       </template>
@@ -264,7 +341,7 @@ const expandPanel = (): void => {
           <div v-else-if="panelWorkspaceId" class="csp-view-body csp-view-body--artifacts">
             <!-- key 变化保证每次展开/换空间时 FileList 重新加载根列表 -->
             <FileList :key="`${panelWorkspaceId}-${artifactsOpen}`" :workspace-id="panelWorkspaceId"
-              @open-file="(e) => openFile(e, 'artifacts')" />
+              @open-file="openArtifactFile" />
           </div>
           <p v-else class="csp-empty-tip">未选择工作空间</p>
         </div>
@@ -634,6 +711,80 @@ const expandPanel = (): void => {
 .space-collapse-leave-to {
   opacity: 0;
   max-height: 0;
+}
+
+/* 文件标签条 */
+.csp-tabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.csp-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.csp-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 160px;
+  padding: 3px 8px;
+  border: 1px solid rgba(8, 145, 178, 0.14);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #374151;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.csp-tab:hover {
+  background: rgba(8, 145, 178, 0.06);
+}
+
+.csp-tab--active {
+  background: rgba(8, 145, 178, 0.1);
+  border-color: rgba(8, 145, 178, 0.3);
+  color: #0891b2;
+}
+
+.csp-tab-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.csp-tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.csp-tab-close:hover {
+  background: rgba(8, 145, 178, 0.15);
+  color: #0e7490;
+}
+
+.csp-load-error {
+  margin: 0;
+  padding: 20px 8px;
+  font-size: 12px;
+  color: #ef4444;
+  text-align: center;
 }
 
 @media (max-width: 768px) {
