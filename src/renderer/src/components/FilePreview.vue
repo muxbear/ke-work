@@ -1,19 +1,34 @@
 <script setup lang="ts">
-// 文件内容预览：纯 <pre> 插值渲染（Vue 自动 HTML 转义，杜绝 XSS）
-defineProps<{
-  name: string
-  relPath: string
-  content: string
-  truncated: boolean
-}>()
+import { computed } from 'vue'
+import { marked } from 'marked'
+
+// 文件内容预览：按扩展名选择渲染方式
+// - markdown → marked 渲染（复用 MessageContent 的全局 .message-content--rich 样式）
+// - 其余 → 纯 <pre> 插值渲染（Vue 自动 HTML 转义，杜绝 XSS；html 展示源码）
+const props = withDefaults(
+  defineProps<{
+    name: string
+    relPath: string
+    content: string
+    truncated: boolean
+    /** 是否显示返回按钮（标签页场景传 false） */
+    showBack?: boolean
+  }>(),
+  { showBack: true }
+)
 
 defineEmits<{ (e: 'back'): void }>()
+
+const isMarkdown = computed(() => /\.md$/i.test(props.name))
+const renderedHtml = computed(() =>
+  isMarkdown.value ? (marked.parse(props.content, { async: false }) as string) : ''
+)
 </script>
 
 <template>
   <div class="fp">
     <div class="fp-head">
-      <button class="fp-back" title="返回列表" @click="$emit('back')">
+      <button v-if="showBack" class="fp-back" title="返回列表" @click="$emit('back')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round">
           <polyline points="15 18 9 12 15 6" />
@@ -26,7 +41,8 @@ defineEmits<{ (e: 'back'): void }>()
     </div>
     <p v-if="truncated" class="fp-truncated">文件较大，仅显示前 200KB</p>
     <div class="fp-body">
-      <pre class="fp-code">{{ content }}</pre>
+      <div v-if="isMarkdown" class="message-content message-content--rich" v-html="renderedHtml"></div>
+      <pre v-else class="fp-code">{{ content }}</pre>
     </div>
   </div>
 </template>
@@ -118,5 +134,12 @@ defineEmits<{ (e: 'back'): void }>()
   color: #334155;
   white-space: pre-wrap;
   word-break: break-all;
+}
+</style>
+
+<style>
+/* 非 scoped：v-html 渲染的 markdown 内容无 scoped 属性，需全局规则 */
+.fp-body .message-content {
+  padding: 12px 16px;
 }
 </style>
