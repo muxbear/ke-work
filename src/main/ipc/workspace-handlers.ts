@@ -98,7 +98,7 @@ export function registerWorkspaceHandlers(ipc: IpcMain, deps: WorkspaceHandlerDe
     if (typeof id !== 'string' || !id || typeof relPath !== 'string') return fail('参数错误')
     try {
       const userId = session.requireUserId()
-      return ok(workspaceService.readFile(id, userId, relPath))
+      return ok(await workspaceService.readFile(id, userId, relPath))
     } catch (err) {
       return fail((err as Error).message)
     }

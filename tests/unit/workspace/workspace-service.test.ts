@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LocalDataSource } from '../../../src/main/database/local/LocalDataSource'
 import { WorkspaceRepository } from '../../../src/main/workspace/WorkspaceRepository'
 import { WorkspaceService } from '../../../src/main/workspace/WorkspaceService'
+import { makeDocx } from './file-fixtures'
 
 /**
  * 清理测试临时目录树。
@@ -298,39 +299,47 @@ describe('WorkspaceService', () => {
   })
 
   describe('readFile', () => {
-    it('读取文本内容', () => {
+    it('读取文本内容', async () => {
       const ws = service.createWorkspace('read-ok', 'u1')
       writeFileSync(join(ws.path, 'hello.txt'), '你好，ke-work', 'utf-8')
-      const result = service.readFile(ws.id, 'u1', 'hello.txt')
+      const result = await service.readFile(ws.id, 'u1', 'hello.txt')
       expect(result.content).toBe('你好，ke-work')
       expect(result.truncated).toBe(false)
     })
 
-    it('含 NUL 的二进制文件拒绝', () => {
+    it('含 NUL 的二进制文件拒绝', async () => {
       const ws = service.createWorkspace('binary', 'u1')
       writeFileSync(join(ws.path, 'img.bin'), Buffer.from([0x89, 0x50, 0x00, 0x0a, 0x01]))
-      expect(() => service.readFile(ws.id, 'u1', 'img.bin')).toThrow(/二进制/)
+      await expect(service.readFile(ws.id, 'u1', 'img.bin')).rejects.toThrow(/二进制/)
     })
 
-    it('超过 200KB 截断并置 truncated', () => {
+    it('docx 走专用加载器提取文本', async () => {
+      const ws = service.createWorkspace('docx', 'u1')
+      writeFileSync(join(ws.path, 'a.docx'), makeDocx('来自 docx 的正文'))
+      const result = await service.readFile(ws.id, 'u1', 'a.docx')
+      expect(result.content).toContain('来自 docx 的正文')
+      expect(result.truncated).toBe(false)
+    })
+
+    it('超过 200KB 截断并置 truncated', async () => {
       const ws = service.createWorkspace('large', 'u1')
       writeFileSync(join(ws.path, 'big.log'), 'a'.repeat(250 * 1024))
-      const result = service.readFile(ws.id, 'u1', 'big.log')
+      const result = await service.readFile(ws.id, 'u1', 'big.log')
       expect(result.truncated).toBe(true)
       expect(result.content.length).toBeLessThanOrEqual(200 * 1024)
     })
 
-    it('越界路径拒绝', () => {
+    it('越界路径拒绝', async () => {
       const ws = service.createWorkspace('read-secure', 'u1')
-      expect(() => service.readFile(ws.id, 'u1', '../secret.txt')).toThrow(/越界/)
-      expect(() => service.readFile(ws.id, 'u1', join(tmpdir(), 'secret.txt'))).toThrow(/越界/)
+      await expect(service.readFile(ws.id, 'u1', '../secret.txt')).rejects.toThrow(/越界/)
+      await expect(service.readFile(ws.id, 'u1', join(tmpdir(), 'secret.txt'))).rejects.toThrow(/越界/)
     })
 
-    it('文件不存在 / 指向目录抛错', () => {
+    it('文件不存在 / 指向目录抛错', async () => {
       const ws = service.createWorkspace('read-missing', 'u1')
-      expect(() => service.readFile(ws.id, 'u1', 'nope.txt')).toThrow(/ENOENT|不存在/)
+      await expect(service.readFile(ws.id, 'u1', 'nope.txt')).rejects.toThrow(/ENOENT|不存在/)
       mkdirSync(join(ws.path, 'dir'))
-      expect(() => service.readFile(ws.id, 'u1', 'dir')).toThrow(/不是文件/)
+      await expect(service.readFile(ws.id, 'u1', 'dir')).rejects.toThrow(/不是文件/)
     })
   })
 

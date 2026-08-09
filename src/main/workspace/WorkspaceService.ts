@@ -1,8 +1,9 @@
-import { closeSync, existsSync, mkdirSync, openSync, readSync, readdirSync, statSync } from 'fs'
-import { isAbsolute, join, resolve, sep } from 'path'
+import { existsSync, mkdirSync, readdirSync, statSync } from 'fs'
+import { extname, isAbsolute, join, resolve, sep } from 'path'
 import { homedir } from 'os'
 import type { WorkspaceRepository } from './WorkspaceRepository'
 import type { WorkspaceRow } from './types'
+import { loadFileText } from './FileLoaders'
 
 /** 文件列表条目（relPath 统一用 '/' 分隔的相对路径，渲染层据此缩进与回传） */
 export interface WorkspaceFileEntry {
@@ -29,10 +30,6 @@ const HIDDEN_NAMES = new Set([
 ])
 /** 单层最多返回条目数 */
 const MAX_LIST_ITEMS = 200
-/** 预览内容大小上限（超出截断） */
-const MAX_PREVIEW_BYTES = 200 * 1024
-/** 二进制嗅探长度 */
-const BINARY_SNIFF_BYTES = 4096
 
 /** 默认工作空间：未选择任何空间时的兜底目录（记录机器级共享，user_id 恒为 NULL） */
 const DEFAULT_WS_NAME = '默认工作空间'
@@ -204,31 +201,16 @@ export class WorkspaceService {
   }
 
   /**
-   * 读取工作空间下文件文本内容
-   * @throws 工作空间不存在 / 路径越界 / 不是文件 / 二进制时抛错
+   * 读取工作空间下文件文本内容（按扩展名分发文本加载器）
+   * @throws 工作空间不存在 / 路径越界 / 不是文件 / 二进制（未知扩展名）时抛错
    */
-  readFile(id: string, userId: string, relPath: string): WorkspaceFileContent {
+  async readFile(id: string, userId: string, relPath: string): Promise<WorkspaceFileContent> {
     const ws = this.resolveWorkspace(id, userId)
     if (!ws) throw new Error('工作空间不存在或目录已移除')
     const target = this.resolveInside(ws.dir, relPath)
     if (!statSync(target).isFile()) throw new Error('不是文件')
-
-    const size = statSync(target).size
-    const truncated = size > MAX_PREVIEW_BYTES
-    // 截断读取（大文件不全量读入内存）
-    const buf = Buffer.alloc(Math.min(size, MAX_PREVIEW_BYTES))
-    const fd = openSync(target, 'r')
-    try {
-      readSync(fd, buf, 0, buf.length, 0)
-    } finally {
-      closeSync(fd)
-    }
-
-    // 二进制嗅探：前 4KB 含 NUL 字节视为二进制
-    const sniff = buf.subarray(0, BINARY_SNIFF_BYTES)
-    if (sniff.includes(0)) throw new Error('二进制文件暂不支持预览')
-
-    return { content: new TextDecoder('utf-8').decode(buf), truncated }
+    const ext = extname(target).toLowerCase().replace(/^\./, '')
+    return loadFileText(target, ext)
   }
 
   /**
