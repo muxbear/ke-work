@@ -182,6 +182,34 @@ watch(panelWorkspaceId, () => {
   artifactsOpen.value = false
 })
 
+// ── 拖拽分割线（调整右栏宽度；localStorage 持久化）──
+const PANEL_WIDTH_KEY = 'ke-work.panel-width'
+const PANEL_WIDTH_MIN = 240
+const panelWidth = ref(Number(localStorage.getItem(PANEL_WIDTH_KEY)) || 300)
+const dragging = ref(false)
+
+watch(panelWidth, (w) => {
+  localStorage.setItem(PANEL_WIDTH_KEY, String(w))
+})
+
+/** 拖拽分割线：mousedown 后跟随鼠标，钳制 [240, min(600, 60% 窗口)]；全屏态禁用 */
+function startDrag(e: MouseEvent): void {
+  if (props.fullscreen) return
+  e.preventDefault()
+  dragging.value = true
+  const onMove = (ev: MouseEvent): void => {
+    const max = Math.min(600, window.innerWidth * 0.6)
+    panelWidth.value = Math.min(max, Math.max(PANEL_WIDTH_MIN, window.innerWidth - ev.clientX))
+  }
+  const onUp = (): void => {
+    dragging.value = false
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
 // ── 收起 / 全屏 ──
 const toggleFullscreen = (): void => {
   emit('update:fullscreen', !props.fullscreen)
@@ -202,7 +230,12 @@ const expandPanel = (): void => {
 </script>
 
 <template>
-  <aside :class="['csp', { 'csp--collapsed': !open, 'csp--fullscreen': fullscreen }]">
+  <aside
+    :class="['csp', { 'csp--collapsed': !open, 'csp--fullscreen': fullscreen, 'csp--dragging': dragging }]"
+    :style="open && !fullscreen ? { width: `${panelWidth}px` } : undefined"
+  >
+    <!-- 拖拽分割线手柄（左缘；收起/全屏态不渲染） -->
+    <div v-if="open && !fullscreen" class="csp-resizer" title="拖动调整宽度" @mousedown="startDrag"></div>
     <!-- 顶部按钮栏：收起态只显示展开按钮 -->
     <div class="csp-topbar">
       <template v-if="open">
@@ -355,7 +388,7 @@ const expandPanel = (): void => {
 
 <style scoped>
 .csp {
-  width: 300px;
+  position: relative;
   flex-shrink: 0;
   border-left: 1px solid rgba(8, 145, 178, 0.1);
   background: #f7f9fb;
@@ -793,5 +826,31 @@ const expandPanel = (): void => {
   .csp {
     display: none;
   }
+}
+
+/* 拖拽分割线 */
+.csp--dragging {
+  transition: none;
+  cursor: col-resize;
+}
+
+.csp-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 10;
+}
+
+.csp-resizer:hover::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 2px;
+  background: rgba(8, 145, 178, 0.5);
 }
 </style>
