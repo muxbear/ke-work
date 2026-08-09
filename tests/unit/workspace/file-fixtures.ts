@@ -47,7 +47,7 @@ export function makePptx(text: string): Buffer {
       ),
       'ppt/slides/slide1.xml': strToU8(
         `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
 <p:cSld><p:spTree><p:sp><p:txBody>
 <a:p><a:r><a:t>${text}</a:t></a:r></a:p>
 </p:txBody></p:sp></p:spTree></p:cSld>
