@@ -133,7 +133,7 @@ async function openFile(entry: WorkspaceFileEntry): Promise<void> {
   } catch (err) {
     const tab = fileTabs.value.find((t) => t.key === entry.relPath)
     if (tab) {
-      tab.error = err instanceof Error ? err.message : '读取失败'
+      tab.error = err instanceof Error ? `读取失败：${err.message}` : '读取失败：未知错误'
       tab.loading = false
     }
   }
