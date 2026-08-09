@@ -3,7 +3,7 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { loadFileText, MAX_BINARY_BYTES, MAX_TEXT_CHARS } from '../../../src/main/workspace/FileLoaders'
-import { makeDocx, makePdf, makePptx, makeXlsx } from './file-fixtures'
+import { makeDocx, makePdf, makePptx, makePptxRaw, makeXlsx } from './file-fixtures'
 
 /** 同 workspace-service.test.ts：先转 ASCII 名再删，绕开 Windows 中文名删除问题 */
 function cleanupTree(dir: string): void {
@@ -68,6 +68,24 @@ describe('FileLoaders.loadFileText', () => {
     writeFileSync(path, makePptx('A &amp; B &lt;C&gt;'))
     const result = await loadFileText(path, 'pptx')
     expect(result.content).toContain('A & B <C>')
+  })
+
+  it('pptx 含制表位段落的文本不泄漏 XML 标签', async () => {
+    const path = join(dir, 'tab.pptx')
+    writeFileSync(
+      path,
+      makePptxRaw(
+        `<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+<p:cSld><p:spTree><p:sp><p:txBody>
+<a:p><a:pPr><a:tabLst><a:tab pos="914400"/></a:tabLst></a:pPr><a:r><a:t>名字</a:t></a:r></a:p>
+</p:txBody></p:sp></p:spTree></p:cSld>
+</p:sld>`
+      )
+    )
+    const result = await loadFileText(path, 'pptx')
+    expect(result.content).toContain('名字')
+    expect(result.content).not.toContain('<')
+    expect(result.content).not.toContain('pPr')
   })
 
   it('pdf 提取文本', async () => {

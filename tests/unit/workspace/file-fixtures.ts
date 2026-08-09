@@ -35,6 +35,18 @@ export function makeDocx(text: string): Buffer {
 
 /** 最小 pptx：slide1 一段文字 */
 export function makePptx(text: string): Buffer {
+  return makePptxRaw(
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+<p:cSld><p:spTree><p:sp><p:txBody>
+<a:p><a:r><a:t>${text}</a:t></a:r></a:p>
+</p:txBody></p:sp></p:spTree></p:cSld>
+</p:sld>`
+  )
+}
+
+/** 最小 pptx：自定义 slide1.xml 内容（复用 makePptx 的 zip 结构） */
+export function makePptxRaw(slideXml: string): Buffer {
   return Buffer.from(
     zipSync({
       '[Content_Types].xml': strToU8(
@@ -45,14 +57,7 @@ export function makePptx(text: string): Buffer {
 <Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
 </Types>`
       ),
-      'ppt/slides/slide1.xml': strToU8(
-        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
-<p:cSld><p:spTree><p:sp><p:txBody>
-<a:p><a:r><a:t>${text}</a:t></a:r></a:p>
-</p:txBody></p:sp></p:spTree></p:cSld>
-</p:sld>`
-      )
+      'ppt/slides/slide1.xml': strToU8(slideXml)
     })
   )
 }

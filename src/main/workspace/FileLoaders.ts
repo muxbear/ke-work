@@ -18,12 +18,15 @@ export interface LoadedText {
 export const MAX_BINARY_BYTES = 20 * 1024 * 1024
 /** 提取/读取文本上限（与现有预览 200KB 一致，单位为字符） */
 export const MAX_TEXT_CHARS = 200 * 1024
+/** pptx 解压后总字节预算（防 zip bomb，仅解压侧防御，不对外暴露） */
+const MAX_DECOMPRESSED_BYTES = 200 * 1024 * 1024
 
 const BINARY_SNIFF_BYTES = 4 * 1024
 
 /** pptx slide XML：段落与文本 run */
 const A_P_REGEX = /<a:p[\s\S]*?<\/a:p>/g
-const A_T_REGEX = /<a:t[^>]*>[\s\S]*?<\/a:t>/g
+// a:t 后必须紧跟空格或 >，避免误匹配 <a:tabLst>/<a:tab .../> 等以 a:t 开头的制表位元素
+const A_T_REGEX = /<a:t(?:[ >])[\s\S]*?<\/a:t>/g
 
 /**
  * 最小 XML 实体反转义（OOXML 文本中的 &amp; 等）。
@@ -73,6 +76,8 @@ async function loadXlsx(filePath: string): Promise<LoadedText> {
 
 async function loadPptx(filePath: string): Promise<LoadedText> {
   const files = unzipSync(new Uint8Array(readBytes(filePath)))
+  const totalBytes = Object.values(files).reduce((sum, f) => sum + f.length, 0)
+  if (totalBytes > MAX_DECOMPRESSED_BYTES) throw new Error('文件过大，暂不支持预览')
   const slideNames = Object.keys(files)
     .filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n))
     .sort((a, b) => {
@@ -87,7 +92,8 @@ async function loadPptx(filePath: string): Promise<LoadedText> {
     return paragraphs
       .map((p) => {
         const runs = p.match(A_T_REGEX) ?? []
-        return runs.map((r) => unescapeXml(r.replace(/<\/?a:t[^>]*>/g, ''))).join('')
+        // 与 A_T_REGEX 一致：仅剥离紧跟空格或 > 的 a:t 标签，不碰 tabLst 等其他元素
+        return runs.map((r) => unescapeXml(r.replace(/<\/?a:t(?=[ >])[^>]*>/g, ''))).join('')
       })
       .join('\n')
   })
