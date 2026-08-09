@@ -127,6 +127,7 @@ async function openFile(entry: WorkspaceFileEntry): Promise<void> {
     if (tab) {
       tab.content = result.content
       tab.truncated = result.truncated
+      tab.error = ''
       tab.loading = false
     }
   } catch (err) {
@@ -154,6 +155,7 @@ async function openArtifactFile(entry: WorkspaceFileEntry): Promise<void> {
 }
 
 function activateTab(key: string): void {
+  view.value = 'files'
   activeTabKey.value = key
 }
 
