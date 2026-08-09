@@ -252,6 +252,44 @@ const expandPanel = (): void => {
             <span class="csp-tab-close" title="关闭" @click.stop="closeTab(tab.key)">×</span>
           </button>
         </div>
+        <!-- 视图切换（网格图标 + 下拉菜单；与「全屏」按钮同行） -->
+        <div class="csp-view-wrap" data-view-menu-trigger>
+          <button
+            class="csp-icon-btn csp-view-trigger"
+            :class="{ 'csp-view-trigger--active': viewMenuOpen }"
+            title="切换视图"
+            @click="viewMenuOpen = !viewMenuOpen"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round">
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <rect x="14" y="14" width="7" height="7" rx="1" />
+            </svg>
+            <svg :class="['csp-view-chevron', { 'csp-view-chevron--open': viewMenuOpen }]" width="10" height="10"
+              viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          <Transition name="dropdown">
+            <div v-if="viewMenuOpen" class="csp-view-menu">
+              <button
+                v-for="(label, key) in viewLabels"
+                :key="key"
+                :class="['csp-view-menu-item', { 'csp-view-menu-item--active': view === key }]"
+                @click="switchView(key as ViewKey)"
+              >
+                <svg v-if="view === key" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="3">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span v-else class="csp-view-menu-gap"></span>
+                {{ label }}
+              </button>
+            </div>
+          </Transition>
+        </div>
         <button class="csp-icon-btn" :title="fullscreen ? '退出全屏' : '全屏'" @click="toggleFullscreen">
           <svg v-if="!fullscreen" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="2" stroke-linecap="round">
@@ -278,28 +316,6 @@ const expandPanel = (): void => {
     </div>
 
     <template v-if="open">
-    <!-- 视图切换（概览 + 下拉菜单） -->
-    <div class="csp-view-head" data-view-menu-trigger @click="viewMenuOpen = !viewMenuOpen">
-      <span>{{ viewLabels[view] }}</span>
-      <svg :class="['csp-view-chevron', { 'csp-view-chevron--open': viewMenuOpen }]" width="12" height="12"
-        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <polyline points="6 9 12 15 18 9" />
-      </svg>
-      <Transition name="dropdown">
-        <div v-if="viewMenuOpen" class="csp-view-menu">
-          <button v-for="(label, key) in viewLabels" :key="key" :class="['csp-view-menu-item', { 'csp-view-menu-item--active': view === key }]"
-            @click="switchView(key as ViewKey)">
-            <svg v-if="view === key" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="3">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-            <span v-else class="csp-view-menu-gap"></span>
-            {{ label }}
-          </button>
-        </div>
-      </Transition>
-    </div>
-
     <!-- 视图体 -->
     <div class="csp-body">
       <!-- 概览 -->
@@ -448,27 +464,6 @@ const expandPanel = (): void => {
   color: #0e7490;
 }
 
-/* 视图切换头 */
-.csp-view-head {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #1a2332;
-  cursor: pointer;
-  border-radius: 6px;
-  margin: 0 8px;
-  flex-shrink: 0;
-  transition: background-color 0.15s ease;
-}
-
-.csp-view-head:hover {
-  background: rgba(8, 145, 178, 0.06);
-}
-
 .csp-view-chevron {
   color: #9ca3af;
   transition: transform 0.2s ease;
@@ -478,10 +473,28 @@ const expandPanel = (): void => {
   transform: rotate(180deg);
 }
 
+/* 视图切换图标按钮（顶栏行内） */
+.csp-view-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.csp-view-trigger {
+  width: auto;
+  padding: 0 6px;
+  gap: 1px;
+}
+
+.csp-view-trigger--active {
+  background: rgba(8, 145, 178, 0.1);
+  color: #0e7490;
+}
+
 .csp-view-menu {
   position: absolute;
   top: calc(100% + 4px);
-  left: 8px;
+  right: 0;
   min-width: 150px;
   padding: 6px 0;
   border-radius: 12px;
