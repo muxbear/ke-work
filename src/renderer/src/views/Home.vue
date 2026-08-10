@@ -128,7 +128,7 @@ const closeHoverChatMenu = (): void => {
   activeChatMenu.value = null
 }
 
-/** 从列表中删除工作空间（仅删记录，磁盘文件夹保留；该空间下的会话归"默认空间"） */
+/** 移除工作空间（主进程级联删除其下全部会话数据；磁盘文件夹保留）；失败仅记日志 */
 const deleteWorkspaceItem = async (wsId: string): Promise<void> => {
   activeSpaceMenu.value = null
   try {
@@ -136,6 +136,25 @@ const deleteWorkspaceItem = async (wsId: string): Promise<void> => {
   } catch (err) {
     console.error('[Home] delete workspace failed:', err)
   }
+}
+
+// ── 移除工作空间确认 ──
+/** 待移除工作空间 { id, 任务数 }（非 null 时显示确认对话框） */
+const deleteWsTarget = ref<{ id: string; count: number } | null>(null)
+
+/** 打开移除确认框（收起菜单；多语句收敛为方法，避免 prettier 模板折行问题） */
+const openDeleteWorkspace = (group: ConversationGroup): void => {
+  activeSpaceMenu.value = null
+  deleteWsTarget.value = { id: group.ws.id, count: group.chats.length }
+}
+
+/** 确认移除：走现有删除管线，级联删除后重拉会话列表（失效会话由 loadConversations 校验清空） */
+const confirmDeleteWorkspace = async (): Promise<void> => {
+  if (!deleteWsTarget.value) return
+  const id = deleteWsTarget.value.id
+  deleteWsTarget.value = null
+  await deleteWorkspaceItem(id)
+  await agentStore.loadConversations()
 }
 
 const handleArchiveChat = (chatId: string): void => {
@@ -664,7 +683,7 @@ const adjustMenuDirection = (): void => {
                         v-if="group.ws.source !== 'default'"
                         class="space-menu-item space-menu-item--danger"
                         type="button"
-                        @click.stop="deleteWorkspaceItem(group.ws.id)"
+                        @click.stop="openDeleteWorkspace(group)"
                       >
                         <svg
                           width="14"
@@ -1075,6 +1094,15 @@ const adjustMenuDirection = (): void => {
       message="确认从列表中删除任务吗？删除后对话记录无法恢复，请确认是否删除？"
       @confirm="confirmDeleteChat"
       @cancel="deleteTarget = null"
+    />
+
+    <!-- 移除工作空间确认弹窗（文案含动态任务数；confirmText 用组件默认「确认」，红色危险风格） -->
+    <ConfirmDialog
+      v-if="deleteWsTarget"
+      title="移除工作空间"
+      :message="`该工作空间下有 ${deleteWsTarget.count} 个任务，移除工作空间后这些任务将被同时删除且无法恢复，确认移除？`"
+      @confirm="confirmDeleteWorkspace"
+      @cancel="deleteWsTarget = null"
     />
 
     <!-- 设置窗口（置于 ConfirmDialog 之后：同层 z-index 按 DOM 顺序绘制，退出登录确认框盖在设置窗口之上） -->

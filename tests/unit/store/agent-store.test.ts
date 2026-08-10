@@ -224,4 +224,38 @@ describe('useAgentStore（会话数据基于 LangGraph checkpoint）', () => {
     // 不触发任何 IPC（主进程任务停止由 auth:logout 联动）
     expect(mock.api.cancelAgentMessage).not.toHaveBeenCalled()
   })
+
+  it('loadConversations 当前会话已不存在（级联删除）时清空选中态', async () => {
+    const store = useAgentStore()
+    mock.conversations.set('c1', {
+      id: 'c1',
+      title: 'A',
+      createAt: 1,
+      updateAt: 2,
+      messages: [{ id: 'm1', role: 'user', content: 'hi' }]
+    })
+    await store.loadConversations()
+    await store.selectConversation('c1')
+    expect(store.currentConversationId).toBe('c1')
+    // 主进程侧会话被级联删除（移除工作空间）→ 重载列表不含 c1
+    mock.conversations.delete('c1')
+    await store.loadConversations()
+    expect(store.currentConversationId).toBeNull()
+    expect(store.currentMessages.length).toBe(0)
+  })
+
+  it('loadConversations 当前会话仍在列表中时保留选中态', async () => {
+    const store = useAgentStore()
+    mock.conversations.set('c1', {
+      id: 'c1',
+      title: 'A',
+      createAt: 1,
+      updateAt: 2,
+      messages: []
+    })
+    await store.loadConversations()
+    await store.selectConversation('c1')
+    await store.loadConversations()
+    expect(store.currentConversationId).toBe('c1')
+  })
 })

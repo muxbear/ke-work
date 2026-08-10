@@ -73,6 +73,14 @@ export const useAgentStore = defineStore('agent', () => {
     const result = await window.api.listConversations()
     if (result.success && result.data) {
       conversations.value = result.data
+      // 当前会话已被删除（如移除工作空间级联删除）→ 清空选中态回欢迎态
+      if (
+        currentConversationId.value &&
+        !conversations.value.some((c) => c.id === currentConversationId.value)
+      ) {
+        currentConversationId.value = null
+        selectedMessages.value = []
+      }
     }
     loaded.value = true
   }
