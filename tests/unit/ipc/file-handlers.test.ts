@@ -24,14 +24,18 @@ describe('file IPC handlers（选中文件即时校验）', () => {
     expect(ipc.handle).toHaveBeenCalledWith('file:inspect', expect.any(Function))
   })
 
-  it('未登录拒绝（requireUserId 抛错）', async () => {
+  it('未登录拒绝（requireUserId 抛错返回 success:false）', async () => {
     const ipc = createFakeIpcMain()
     registerFileHandlers(ipc as never, {
       requireUserId: () => {
         throw new Error('未登录')
       }
     })
-    await expect(ipc.invoke('file:inspect', 'C:\\a.txt')).rejects.toThrow('未登录')
+    const result = await ipc.invoke<{ success: boolean; error?: string }>(
+      'file:inspect', 'C:\\a.txt'
+    )
+    expect(result.success).toBe(false)
+    expect(result.error).toBeTruthy()
   })
 
   it('参数错误：path 非字符串', async () => {
@@ -47,6 +51,8 @@ describe('file IPC handlers（选中文件即时校验）', () => {
     const txt = join(dir, 'a.md')
     writeFileSync(txt, 'hi')
     writeFileSync(join(dir, 'a.zip'), 'z')
+    writeFileSync(join(dir, 'a.png'), 'p')
+    writeFileSync(join(dir, 'a.pdf'), '%PDF')
     const ipc = createFakeIpcMain()
     registerFileHandlers(ipc as never, { requireUserId: () => 'u1' })
     const r1 = await ipc.invoke<{ success: boolean; data?: { exists: boolean; kind: string } }>(
@@ -57,6 +63,14 @@ describe('file IPC handlers（选中文件即时校验）', () => {
       'file:inspect', join(dir, 'a.zip')
     )
     expect(r2.data?.kind).toBe('unsupported')
+    const r3 = await ipc.invoke<{ success: boolean; data?: { kind: string } }>(
+      'file:inspect', join(dir, 'a.png')
+    )
+    expect(r3.data?.kind).toBe('image')
+    const r4 = await ipc.invoke<{ success: boolean; data?: { kind: string } }>(
+      'file:inspect', join(dir, 'a.pdf')
+    )
+    expect(r4.data?.kind).toBe('pdf')
   })
 
   it('不存在返回 kind=missing', async () => {

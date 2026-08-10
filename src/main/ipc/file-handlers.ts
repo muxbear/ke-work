@@ -10,7 +10,11 @@ export interface FileInspectDeps {
 /** 注册 file:inspect：选中文件时即时校验（存在性 + 类型分类 + 大小），供渲染层拒绝非法附件 */
 export function registerFileHandlers(ipcMain: IpcMain, deps: FileInspectDeps): void {
   ipcMain.handle('file:inspect', async (_event, path?: unknown) => {
-    deps.requireUserId()
+    try {
+      deps.requireUserId()
+    } catch (err) {
+      return { success: false, error: (err as Error).message || '未登录' }
+    }
     if (typeof path !== 'string' || !path) return { success: false, error: '参数错误' }
     const info = await stat(path).catch(() => null)
     if (!info || !info.isFile()) {
