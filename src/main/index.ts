@@ -25,6 +25,7 @@ import { registerAuthHandlers } from './ipc/auth-handlers'
 import { AgentManager } from './agent/AgentManager'
 import { ConversationStore } from './agent/ConversationStore'
 import { registerConversationHandlers } from './ipc/conversation-handlers'
+import { registerFileHandlers } from './ipc/file-handlers'
 import { registerModeHandlers } from './ipc/mode-handlers'
 import { WorkspaceService } from './workspace/WorkspaceService'
 import { registerWorkspaceHandlers } from './ipc/workspace-handlers'
@@ -159,6 +160,9 @@ app.whenReady().then(() => {
     () => dataSourceFactory.getLocalDb()
   )
   registerConversationHandlers(ipcMain, { conversationStore, session })
+
+  // ── 注册文件附件 IPC（选中文件即时校验：存在性 + 类型分类 + 大小）──
+  registerFileHandlers(ipcMain, { requireUserId: () => session.requireUserId() })
 
   // ── 系统设置服务（代理/锁屏/目录依赖在此注入；机器级配置，不依赖登录态）──
   const applyProxy = async (mode: string, url: string): Promise<void> => {

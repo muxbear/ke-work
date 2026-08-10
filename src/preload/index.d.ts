@@ -42,6 +42,12 @@ export interface AgentAPI {
   onAgentThinking(callback: (chunk: string) => void): () => void
   onAgentThinkingDone(callback: () => void): () => void
   onAgentDone(callback: () => void): () => void
+  /** 选中文件即时校验（存在性 + 类型分类 + 大小），返回 kind: text/image/pdf/unsupported/missing */
+  inspectFile(path: string): Promise<IpcResult<{
+    exists: boolean
+    size: number
+    kind: 'text' | 'image' | 'pdf' | 'unsupported' | 'missing'
+  }>>
 }
 
 export interface AuthAPI {

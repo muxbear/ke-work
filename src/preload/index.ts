@@ -52,6 +52,10 @@ const api = {
     ipcRenderer.on('conversation:title-updated', handler)
     return () => ipcRenderer.removeListener('conversation:title-updated', handler)
   },
+  // ── 文件附件 API ──
+  inspectFile(path: string) {
+    return ipcRenderer.invoke('file:inspect', path)
+  },
   // ── 认证 API ──
   loginByPassword(account: string, password: string) {
     return ipcRenderer.invoke('auth:login-password', account, password)
