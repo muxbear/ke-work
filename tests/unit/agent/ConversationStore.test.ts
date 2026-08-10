@@ -539,4 +539,23 @@ describe('getMessages 折叠文件附件块（📎 文件名）', () => {
     const messages = await store.getMessages('u1', 'c1')
     expect(messages[0].content).toBe('📎 图.png📎 图片')
   })
+
+  it('非对象块（null）重置图片消费状态，后续 image_url 独立显示', async () => {
+    const tuples = [
+      makeTuple('u:u1:c1', [
+        {
+          id: 'm1',
+          role: 'human',
+          content: [
+            { type: 'text', text: '【文件：图.png】' },
+            null,
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,xxx' } }
+          ]
+        }
+      ], new Date(100))
+    ]
+    const store = new ConversationStore(() => makeCheckpointer(tuples) as never)
+    const messages = await store.getMessages('u1', 'c1')
+    expect(messages[0].content).toBe('📎 图.png📎 图片')
+  })
 })

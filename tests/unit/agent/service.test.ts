@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 import type { DeepAgent } from 'deepagents'
-import { RemoveMessage, HumanMessage, AIMessage } from '@langchain/core/messages'
+import { RemoveMessage, HumanMessage, AIMessage, ToolMessage } from '@langchain/core/messages'
 import {
   buildRegenerateInput,
   invokeSendMessage,
@@ -134,5 +134,7 @@ describe('toLangChainMessages（rawContent 透传）', () => {
     ])
     expect(msgs[0]).toBeInstanceOf(AIMessage)
     expect((msgs[0] as AIMessage).content).toBe('回复')
+    expect(msgs[1]).toBeInstanceOf(ToolMessage)
+    expect((msgs[1] as ToolMessage).content).toBe('工具结果')
   })
 })

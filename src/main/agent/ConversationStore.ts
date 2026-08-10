@@ -361,10 +361,8 @@ export class ConversationStore {
           role,
           content: parsed.content,
           ...(parsed.reasoning ? { reasoning: parsed.reasoning } : {}),
-          // content 为数组时原样保留原始块（图输入透传用）；string 旧数据不设该字段
-          ...(typeof msg.content === 'object' && msg.content !== null
-            ? { rawContent: msg.content }
-            : {})
+          // content 为数组时原样保留原始块（图输入透传用）；string/非数组对象旧数据不设该字段
+          ...(Array.isArray(msg.content) ? { rawContent: msg.content } : {})
         }
         return out
       })
