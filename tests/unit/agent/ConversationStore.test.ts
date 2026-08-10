@@ -281,7 +281,14 @@ describe('ConversationStore（基于 LangGraph checkpointer 的会话服务）',
         id: 'msg-2',
         role: 'assistant',
         content: '**你好**，我是 AI 助手。有什么可以帮你？',
-        reasoning: '第一步思考\n第二步思考'
+        reasoning: '第一步思考\n第二步思考',
+        rawContent: [
+          { type: 'reasoning', reasoning: '第一步思考' },
+          { type: 'text', text: '**你好**，我是 AI 助手。' },
+          { type: 'tool_use', id: 'call_1', name: 'ls', input: {} },
+          { type: 'reasoning', reasoning: '第二步思考' },
+          { type: 'text', text: '有什么可以帮你？' }
+        ]
       }
     ])
   })
@@ -431,5 +438,68 @@ describe('ConversationStore 自定义标题（conversation_titles 表）', () =>
     const deleted = await store.deleteConversationsByWorkspace('u1', 'ws-1')
     expect(deleted).toBe(0)
     expect(cp.deleteThread).not.toHaveBeenCalled()
+  })
+})
+
+describe('getMessages 折叠文件附件块（📎 文件名）', () => {
+  it('文本文件块 → 仅留 📎 文件名（内容不进入 UI 文本）', async () => {
+    const tuples = [
+      makeTuple('u:u1:c1', [
+        {
+          id: 'm1',
+          role: 'human',
+          content: [
+            { type: 'text', text: '请看看这个文件' },
+            { type: 'text', text: '【文件：报告.md】\n正文内容\n【文件内容结束】' }
+          ]
+        }
+      ], new Date(100))
+    ]
+    const store = new ConversationStore(() => makeCheckpointer(tuples) as never)
+    const messages = await store.getMessages('u1', 'c1')
+    expect(messages[0].content).toBe('请看看这个文件📎 报告.md')
+    expect(messages[0].rawContent).toBeDefined()
+    expect((messages[0].rawContent as unknown[]).length).toBe(2)
+  })
+
+  it('图片二元组（标记块 + image_url）→ 单个 📎 文件名', async () => {
+    const tuples = [
+      makeTuple('u:u1:c1', [
+        {
+          id: 'm1',
+          role: 'human',
+          content: [
+            { type: 'text', text: '看这张图' },
+            { type: 'text', text: '【文件：图.png】' },
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,xxx' } }
+          ]
+        }
+      ], new Date(100))
+    ]
+    const store = new ConversationStore(() => makeCheckpointer(tuples) as never)
+    const messages = await store.getMessages('u1', 'c1')
+    expect(messages[0].content).toBe('看这张图📎 图.png')
+  })
+
+  it('普通文本块行为不变（回归）', async () => {
+    const tuples = [
+      makeTuple('u:u1:c1', [
+        { id: 'm1', role: 'human', content: [{ type: 'text', text: '普通文本' }] }
+      ], new Date(100))
+    ]
+    const store = new ConversationStore(() => makeCheckpointer(tuples) as never)
+    const messages = await store.getMessages('u1', 'c1')
+    expect(messages[0].content).toBe('普通文本')
+    expect(messages[0].rawContent).toBeDefined()
+  })
+
+  it('string content（旧数据）无 rawContent 字段', async () => {
+    const tuples = [
+      makeTuple('u:u1:c1', [{ id: 'm1', role: 'human', content: '旧格式文本' }], new Date(100))
+    ]
+    const store = new ConversationStore(() => makeCheckpointer(tuples) as never)
+    const messages = await store.getMessages('u1', 'c1')
+    expect(messages[0].content).toBe('旧格式文本')
+    expect(messages[0].rawContent).toBeUndefined()
   })
 })
