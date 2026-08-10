@@ -15,7 +15,10 @@ import {
   expandFileParts,
   validateMessageParts,
   MAX_ATTACH_FILES,
-  MAX_ATTACH_TEXT_CHARS
+  MAX_ATTACH_TEXT_CHARS,
+  MAX_TEXT_FILE_BYTES,
+  MAX_IMAGE_BYTES,
+  MAX_PDF_BYTES
 } from '../../../src/main/agent/file-parts'
 import type { MessagePart } from '../../../src/preload/index.d'
 
@@ -120,5 +123,32 @@ describe('expandFileParts（文件 → 内容块，位置保序）', () => {
     const text = blocks[0] as { text: string }
     expect(text.text).toContain('…（内容过长，已截断）')
     expect(text.text.length).toBeLessThan(MAX_ATTACH_TEXT_CHARS + 100)
+  })
+
+  it('文本文件超过 5MB → 文件过大', async () => {
+    const p = tmpFile('big.txt', Buffer.alloc(MAX_TEXT_FILE_BYTES + 1, 0x41))
+    await expect(expandFileParts([{ type: 'file', path: p }])).rejects.toThrow('文件过大：big.txt')
+  })
+
+  it('图片文件超过 10MB → 文件过大', async () => {
+    const p = tmpFile('big.png', Buffer.alloc(MAX_IMAGE_BYTES + 1, 0x41))
+    await expect(expandFileParts([{ type: 'file', path: p }])).rejects.toThrow('文件过大：big.png')
+  })
+
+  it('PDF 文件超过 20MB → 文件过大', async () => {
+    const p = tmpFile('big.pdf', Buffer.alloc(MAX_PDF_BYTES + 1, 0x41))
+    await expect(expandFileParts([{ type: 'file', path: p }])).rejects.toThrow('文件过大：big.pdf')
+  })
+
+  it('混合 parts 中第二个文件缺失 → 整体失败，不返回部分块', async () => {
+    const ok = tmpFile('ok.txt', 'AAA')
+    await expect(
+      expandFileParts([
+        { type: 'text', text: '先' },
+        { type: 'file', path: ok },
+        { type: 'file', path: join(tmpdir(), 'no-such-file-xyz.txt') },
+        { type: 'text', text: '后' }
+      ])
+    ).rejects.toThrow('文件不存在')
   })
 })
