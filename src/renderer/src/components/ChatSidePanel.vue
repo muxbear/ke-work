@@ -90,6 +90,25 @@ const switchView = (key: ViewKey): void => {
   viewMenuOpen.value = false
 }
 
+/** 网格图标：工作空间文件视图开关。标签页内容预览中先收起预览回到文件树（标签保留在顶栏），
+ *  文件树展示中切回进入文件视图前的视图 */
+const lastNonFilesView = ref<ViewKey>('overview')
+const toggleFilesView = (): void => {
+  if (view.value !== 'files') {
+    // 从其他视图进入：记住来源视图，展示文件树（不残留上一个标签页内容）
+    lastNonFilesView.value = view.value
+    activeTabKey.value = null
+    view.value = 'files'
+  } else if (activeTab.value) {
+    // 标签页内容预览中：收起预览回到文件树
+    activeTabKey.value = null
+  } else {
+    // 文件树展示中：切回进入前的视图
+    view.value = lastNonFilesView.value
+  }
+  viewMenuOpen.value = false
+}
+
 // 外部点击关闭下拉
 const handleDocumentClick = (e: MouseEvent): void => {
   const target = e.target as HTMLElement
@@ -239,13 +258,13 @@ const expandPanel = (): void => {
     <!-- 顶部按钮栏：收起态只显示展开按钮 -->
     <div class="csp-topbar">
       <template v-if="open">
-        <!-- 视图切换（网格图标 + 下拉菜单；靠左对齐） -->
+        <!-- 视图切换（网格图标 = 文件视图开关，箭头 = 下拉菜单触发；靠左对齐） -->
         <div class="csp-view-wrap" data-view-menu-trigger>
           <button
             class="csp-icon-btn csp-view-trigger"
-            :class="{ 'csp-view-trigger--active': viewMenuOpen }"
-            title="切换视图"
-            @click="viewMenuOpen = !viewMenuOpen"
+            :class="{ 'csp-view-trigger--active': view === 'files' }"
+            title="工作空间文件"
+            @click="toggleFilesView"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
               stroke-linecap="round">
@@ -254,6 +273,13 @@ const expandPanel = (): void => {
               <rect x="3" y="14" width="7" height="7" rx="1" />
               <rect x="14" y="14" width="7" height="7" rx="1" />
             </svg>
+          </button>
+          <button
+            class="csp-icon-btn csp-view-trigger"
+            :class="{ 'csp-view-trigger--active': viewMenuOpen }"
+            title="切换视图"
+            @click="viewMenuOpen = !viewMenuOpen"
+          >
             <svg :class="['csp-view-chevron', { 'csp-view-chevron--open': viewMenuOpen }]" width="10" height="10"
               viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <polyline points="6 9 12 15 18 9" />
@@ -473,17 +499,13 @@ const expandPanel = (): void => {
   transform: rotate(180deg);
 }
 
-/* 视图切换图标按钮（顶栏行内） */
+/* 视图切换按钮组（顶栏行内；靠左对齐分割栏，其余按钮组挤到右缘） */
 .csp-view-wrap {
   position: relative;
   display: flex;
   align-items: center;
-}
-
-.csp-view-trigger {
-  width: auto;
-  padding: 0 6px;
-  gap: 1px;
+  gap: 2px;
+  margin-right: auto;
 }
 
 .csp-view-trigger--active {
@@ -494,7 +516,7 @@ const expandPanel = (): void => {
 .csp-view-menu {
   position: absolute;
   top: calc(100% + 4px);
-  right: 0;
+  left: 0;
   min-width: 150px;
   padding: 6px 0;
   border-radius: 12px;
