@@ -7,8 +7,28 @@ function firstCallArg(fn: { mock: { calls: unknown[][] } }): unknown {
   return fn.mock.calls[0]?.[0]
 }
 
+/** mock api 各通道类型（vitest Mock；返回类型供显式标注，满足 explicit-function-return-type） */
+interface MockApi {
+  listConversations: ReturnType<typeof vi.fn>
+  getConversation: ReturnType<typeof vi.fn>
+  deleteConversation: ReturnType<typeof vi.fn>
+  sendAgentMessage: ReturnType<typeof vi.fn>
+  cancelAgentMessage: ReturnType<typeof vi.fn>
+  onAgentChunk: ReturnType<typeof vi.fn>
+  onAgentThinking: ReturnType<typeof vi.fn>
+  onAgentThinkingDone: ReturnType<typeof vi.fn>
+  onAgentDone: ReturnType<typeof vi.fn>
+  onConversationTitleUpdated: ReturnType<typeof vi.fn>
+}
+
 /** 内存版 window.api（仅保留通道；会话数据由 LangGraph checkpointer 管理） */
-function createMockWindowApi() {
+function createMockWindowApi(): {
+  api: MockApi
+  conversations: Map<
+    string,
+    { id: string; title: string; createAt: number; updateAt: number; messages: unknown[] }
+  >
+} {
   const conversations = new Map<
     string,
     { id: string; title: string; createAt: number; updateAt: number; messages: unknown[] }
@@ -17,7 +37,12 @@ function createMockWindowApi() {
   const api = {
     listConversations: vi.fn(async () => ({
       success: true,
-      data: [...conversations.values()].map(({ messages: _m, ...c }) => c)
+      data: [...conversations.values()].map((c) => ({
+        id: c.id,
+        title: c.title,
+        createAt: c.createAt,
+        updateAt: c.updateAt
+      }))
     })),
     getConversation: vi.fn(async (id: string) => {
       const conv = conversations.get(id)
