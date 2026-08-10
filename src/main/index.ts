@@ -207,7 +207,7 @@ app.whenReady().then(() => {
     initialSettings.meta.workspaceBaseDir,
     { selectDir, openPath }
   )
-  registerWorkspaceHandlers(ipcMain, { workspaceService, session })
+  registerWorkspaceHandlers(ipcMain, { workspaceService, conversationStore, session })
 
   // ── 启动时应用设置（窗口创建前；顺序：工作空间基址 → 代理 → 锁屏）──
   void applyProxy(

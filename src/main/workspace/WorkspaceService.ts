@@ -160,13 +160,20 @@ export class WorkspaceService {
   }
 
   /**
-   * 从列表中删除工作空间（仅删记录，不删除磁盘文件夹——避免误删用户数据；默认空间不可删）
-   * 已绑定该空间的会话在下次加载时归"默认空间"（resolveWorkspace 找不到记录）
+   * 校验工作空间可删除（不存在 / 默认空间抛错；不落库，供 workspace:delete 级联删除前守卫）
    */
-  deleteWorkspace(id: string, userId: string): void {
+  assertDeletable(id: string, userId: string): void {
     const ws = this.repo.getById(id, userId)
     if (!ws) throw new Error('工作空间不存在')
     if (ws.source === 'default') throw new Error('默认工作空间不可删除')
+  }
+
+  /**
+   * 从列表中删除工作空间（仅删记录，不删除磁盘文件夹——避免误删用户数据；默认空间不可删）
+   * 业务表绑定的会话由 workspace:delete handler 级联删除；仅 metadata 绑定的旧会话随记录删除后归默认空间
+   */
+  deleteWorkspace(id: string, userId: string): void {
+    this.assertDeletable(id, userId)
     if (this.repo.delete(id, userId) === 0) throw new Error('工作空间不存在')
     console.log(`[workspace] deleted workspace record: ${id}`)
   }

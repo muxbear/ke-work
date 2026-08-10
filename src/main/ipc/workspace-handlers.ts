@@ -1,10 +1,13 @@
 import type { IpcMain } from 'electron'
 import type { WorkspaceService } from '../workspace/WorkspaceService'
 import type { SessionService } from '../services/SessionService'
+import type { ConversationStore } from '../agent/ConversationStore'
 
 export interface WorkspaceHandlerDeps {
   workspaceService: WorkspaceService
   session: SessionService
+  /** 级联删除会话：移除工作空间时先删其下会话数据 */
+  conversationStore: ConversationStore
 }
 
 function ok<T>(data: T): { success: true; data: T } {
@@ -21,7 +24,7 @@ function fail(error: string): { success: false; error: string } {
  * 渲染层只传 id/name，路径一律由主进程解析，防路径注入
  */
 export function registerWorkspaceHandlers(ipc: IpcMain, deps: WorkspaceHandlerDeps): void {
-  const { workspaceService, session } = deps
+  const { workspaceService, conversationStore, session } = deps
 
   ipc.handle('workspace:list', async () => {
     try {
@@ -76,6 +79,9 @@ export function registerWorkspaceHandlers(ipc: IpcMain, deps: WorkspaceHandlerDe
     if (typeof id !== 'string' || !id) return fail('参数错误')
     try {
       const userId = session.requireUserId()
+      // 先守卫可删除性（默认空间不可删），再做不可逆的级联删除
+      workspaceService.assertDeletable(id, userId)
+      await conversationStore.deleteConversationsByWorkspace(userId, id)
       workspaceService.deleteWorkspace(id, userId)
       return ok(null)
     } catch (err) {

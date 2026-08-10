@@ -55,8 +55,12 @@ function createDeps(
       ensureDefaultWorkspace: vi.fn().mockReturnValue(fakeDefault),
       openWorkspace: vi.fn().mockResolvedValue(undefined),
       deleteWorkspace: vi.fn().mockReturnValue(undefined),
+      assertDeletable: vi.fn().mockReturnValue(undefined),
       listFiles: vi.fn().mockReturnValue([]),
       readFile: vi.fn().mockReturnValue({ content: '', truncated: false })
+    } as never,
+    conversationStore: {
+      deleteConversationsByWorkspace: vi.fn().mockResolvedValue(0)
     } as never,
     session,
     ...overrides
@@ -162,16 +166,71 @@ describe('workspace IPC handlers', () => {
     expect(result.success).toBe(true)
   })
 
-  it('注册 workspace:delete 通道并调用服务（注入 userId）', async () => {
+  it('注册 workspace:delete 通道：先级联删除会话再删空间记录', async () => {
     const ipc = createFakeIpcMain()
+    const deleteConversations = vi.fn().mockResolvedValue(2)
     const deleteWorkspace = vi.fn().mockReturnValue(undefined)
-    registerWorkspaceHandlers(ipc as never, createDeps({ workspaceService: { deleteWorkspace } }))
+    const assertDeletable = vi.fn().mockReturnValue(undefined)
+    registerWorkspaceHandlers(
+      ipc as never,
+      createDeps({
+        workspaceService: { assertDeletable, deleteWorkspace },
+        conversationStore: { deleteConversationsByWorkspace: deleteConversations }
+      })
+    )
     expect(ipc.handle).toHaveBeenCalledWith('workspace:delete', expect.any(Function))
     const noId = await ipc.invoke<{ success: boolean; error?: string }>('workspace:delete')
     expect(noId.success).toBe(false)
     const ok = await ipc.invoke<{ success: boolean }>('workspace:delete', 'ws-1')
+    // 先会话后记录，均注入 userId
+    expect(deleteConversations).toHaveBeenCalledWith('real-user', 'ws-1')
     expect(deleteWorkspace).toHaveBeenCalledWith('ws-1', 'real-user')
+    expect(
+      deleteConversations.mock.invocationCallOrder[0] < deleteWorkspace.mock.invocationCallOrder[0]
+    ).toBe(true)
     expect(ok.success).toBe(true)
+  })
+
+  it('delete 级联删会话抛错 → 返回 fail 且不再删空间记录', async () => {
+    const ipc = createFakeIpcMain()
+    const deleteConversations = vi.fn().mockRejectedValue(new Error('checkpoint 删除失败'))
+    const deleteWorkspace = vi.fn().mockReturnValue(undefined)
+    const assertDeletable = vi.fn().mockReturnValue(undefined)
+    registerWorkspaceHandlers(
+      ipc as never,
+      createDeps({
+        workspaceService: { assertDeletable, deleteWorkspace },
+        conversationStore: { deleteConversationsByWorkspace: deleteConversations }
+      })
+    )
+    const result = await ipc.invoke<{ success: boolean; error?: string }>('workspace:delete', 'ws-1')
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('checkpoint')
+    expect(deleteWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('delete 默认空间（assertDeletable 抛错）→ 返回 fail 且不级联删会话', async () => {
+    const ipc = createFakeIpcMain()
+    const deleteConversations = vi.fn().mockResolvedValue(0)
+    const deleteWorkspace = vi.fn().mockReturnValue(undefined)
+    const assertDeletable = vi.fn().mockImplementation(() => {
+      throw new Error('默认工作空间不可删除')
+    })
+    registerWorkspaceHandlers(
+      ipc as never,
+      createDeps({
+        workspaceService: { assertDeletable, deleteWorkspace },
+        conversationStore: { deleteConversationsByWorkspace: deleteConversations }
+      })
+    )
+    const result = await ipc.invoke<{ success: boolean; error?: string }>(
+      'workspace:delete',
+      'ws-default'
+    )
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('默认')
+    expect(deleteConversations).not.toHaveBeenCalled()
+    expect(deleteWorkspace).not.toHaveBeenCalled()
   })
 
   it('注册 workspace:list-files/read-file 通道', async () => {
