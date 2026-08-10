@@ -99,6 +99,21 @@ export function validateMessageParts(input: unknown): MessagePart[] {
   return out
 }
 
+/**
+ * agent:send 入参归一（主进程权威）：字符串 → 单文本段；数组 → validateMessageParts；
+ * 无有效内容（空数组 / 仅空文本段）抛「参数错误」。注意：仅含文件（无文本）是合法输入
+ */
+export function normalizeMessageInput(content: unknown): MessagePart[] {
+  const parts =
+    typeof content === 'string'
+      ? [{ type: 'text' as const, text: content }]
+      : validateMessageParts(content)
+  if (parts.length === 0 || parts.every((p) => p.type === 'text' && !p.text.trim())) {
+    throw new Error('参数错误')
+  }
+  return parts
+}
+
 /** 文本内容截断到上下文预算，截断时追加标注 */
 function truncateForLLM(content: string, truncatedByLoader: boolean): string {
   const note = '\n…（内容过长，已截断）'

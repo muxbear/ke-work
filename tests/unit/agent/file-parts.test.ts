@@ -13,6 +13,7 @@ import { loadFileText } from '../../../src/main/workspace/FileLoaders'
 import {
   classifyPath,
   expandFileParts,
+  normalizeMessageInput,
   validateMessageParts,
   MAX_ATTACH_FILES,
   MAX_ATTACH_TEXT_CHARS,
@@ -60,6 +61,47 @@ describe('validateMessageParts（形状校验）', () => {
       path: `C:\\f${i}.txt`
     }))
     expect(() => validateMessageParts(many)).toThrow(`单次最多 ${MAX_ATTACH_FILES} 个文件`)
+  })
+})
+
+describe('normalizeMessageInput（入参归一：字符串 → 单文本段；无有效内容拒绝）', () => {
+  it('字符串 → 单文本段', () => {
+    expect(normalizeMessageInput('你好')).toEqual([{ type: 'text', text: '你好' }])
+  })
+
+  it('合法数组原样返回', () => {
+    const parts: MessagePart[] = [
+      { type: 'text', text: '请分析' },
+      { type: 'file', path: 'C:\\a.txt' }
+    ]
+    expect(normalizeMessageInput(parts)).toEqual(parts)
+  })
+
+  it('空字符串 / 空数组 / 仅空文本段 → 抛「参数错误」', () => {
+    expect(() => normalizeMessageInput('')).toThrow('参数错误')
+    expect(() => normalizeMessageInput([])).toThrow('参数错误')
+    expect(() => normalizeMessageInput([{ type: 'text', text: '' }])).toThrow('参数错误')
+    expect(() => normalizeMessageInput([{ type: 'text', text: '  ' }])).toThrow('参数错误')
+    expect(() =>
+      normalizeMessageInput([
+        { type: 'text', text: '' },
+        { type: 'text', text: '' }
+      ])
+    ).toThrow('参数错误')
+  })
+
+  it('仅文件（无文本）是合法输入', () => {
+    expect(normalizeMessageInput([{ type: 'file', path: 'C:\\a.txt' }])).toEqual([
+      { type: 'file', path: 'C:\\a.txt' }
+    ])
+  })
+
+  it('文本+文件混合 → 通过', () => {
+    const parts: MessagePart[] = [
+      { type: 'text', text: '看下' },
+      { type: 'file', path: 'C:\\a.txt' }
+    ]
+    expect(normalizeMessageInput(parts)).toEqual(parts)
   })
 })
 

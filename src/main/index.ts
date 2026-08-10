@@ -12,7 +12,7 @@ import { join } from 'path'
 import { randomBytes, randomUUID } from 'crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { invokeSendMessage, toLangChainMessages, buildRegenerateInput } from './agent/service'
-import { expandFileParts, validateMessageParts } from './agent/file-parts'
+import { expandFileParts, normalizeMessageInput } from './agent/file-parts'
 import type { MessagePart } from '../preload/index.d'
 import { summarizeTitle } from './agent/title-service'
 import { HumanMessage } from '@langchain/core/messages'
@@ -305,13 +305,10 @@ app.whenReady().then(() => {
       const customModelId = typeof optsObj.customModelId === 'string' ? optsObj.customModelId : undefined
 
       // 消息内容归一：字符串（regenerate 历史文本）→ 单文本段；数组 → 形状校验（主进程权威）
-      // 校验失败返回错误对象（错误信息直达渲染层，避免 handle 拒绝丢失消息）
+      // 校验失败/无有效内容返回错误对象（错误信息直达渲染层，避免 handle 拒绝丢失消息）
       let parts: MessagePart[]
       try {
-        parts =
-          typeof content === 'string'
-            ? [{ type: 'text', text: content }]
-            : validateMessageParts(content)
+        parts = normalizeMessageInput(content)
       } catch (err) {
         return { success: false, error: (err as Error).message || '参数错误' }
       }
