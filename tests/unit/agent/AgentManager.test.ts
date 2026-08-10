@@ -41,6 +41,19 @@ vi.mock('@langchain/langgraph-checkpoint-postgres/store', () => ({
 
 import { AgentManager } from '../../../src/main/agent/AgentManager'
 
+/** 假 ModelService（断言中间件注册用；getCredential 无实际调用） */
+function createFakeModelService(): {
+  getCredential: ReturnType<typeof vi.fn>
+  list: () => never[]
+  listProviders: () => never[]
+} {
+  return {
+    getCredential: vi.fn().mockReturnValue(null),
+    list: () => [],
+    listProviders: () => []
+  }
+}
+
 describe('AgentManager', () => {
   let workDir: string
   let manager: AgentManager
@@ -81,5 +94,32 @@ describe('AgentManager', () => {
 
   it('AG-07: 未 init 时 switchMode 抛错', async () => {
     await expect(manager.switchMode('cloud')).rejects.toThrow(/not initialized/i)
+  })
+
+  it('AG-08: 注入 modelService 后 build 注册模型覆盖中间件（config.middleware 含 modelOverrideMiddleware）', async () => {
+    const withService = new AgentManager(
+      workDir,
+      join(workDir, 'ke-work.db'),
+      join(workDir, 'ke-work.db'),
+      createFakeModelService() as never
+    )
+    await withService.init('local')
+    const config = createDeepAgentMock.mock.calls[0][0] as Record<string, never>
+    const middleware = config.middleware as { name?: string }[]
+    expect(Array.isArray(middleware)).toBe(true)
+    expect(middleware).toHaveLength(1)
+    expect(middleware[0].name).toBe('modelOverrideMiddleware')
+    // 模式切换重建同样带中间件（保留自定义配置）
+    await withService.switchMode('cloud')
+    const config2 = createDeepAgentMock.mock.calls[1][0] as Record<string, never>
+    expect((config2.middleware as { name?: string }[])[0].name).toBe('modelOverrideMiddleware')
+    // 原 config.model 断言不回归
+    expect(config2.model).toBe('deepseek:deepseek-v4-pro')
+  })
+
+  it('AG-09: 未注入 modelService 时不注册中间件（config.middleware 缺失）', async () => {
+    await manager.init('local')
+    const config = createDeepAgentMock.mock.calls[0][0] as Record<string, never>
+    expect(config.middleware).toBeUndefined()
   })
 })

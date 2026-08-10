@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import QRCode from 'qrcode'
 import { useAgentStore } from '@store/agent'
 import { useWorkspaceStore } from '@store/workspace'
+import { useModelStore } from '@store/models'
 import MessageContent from '@components/MessageContent.vue'
 import ChatSidePanel from '@components/ChatSidePanel.vue'
 import PlusMenu from '@components/PlusMenu.vue'
@@ -11,6 +12,7 @@ import { useCatalogStore, type Mode, type SkillItem } from '@store/catalog'
 const agentStore = useAgentStore()
 const workspaceStore = useWorkspaceStore()
 const catalog = useCatalogStore()
+const modelStore = useModelStore()
 const emit = defineEmits<{ navigate: [tab: '专家·技能·连接器'] }>()
 
 // 通过本地 computed 包装 agentStore，建立正确的 Vue 响应式依赖链
@@ -576,7 +578,10 @@ const jumpToQuestion = (id: string): void => {
 const regenerateLast = (): void => {
   // 用户主动触发的消息动作：即使向上翻阅过也强制回到底部跟随
   atBottom.value = true
-  agentStore.regenerate({ model: model.value })
+  agentStore.regenerate({
+    model: model.value,
+    customModelId: selectedCustomId.value ?? undefined
+  })
 }
 
 // ── Computed ──
@@ -628,11 +633,22 @@ const quickChips = [
   { icon: 'slides', label: '幻灯片' }
 ]
 
-const modelOptions = ['Auto', 'Qing-Pro', 'Qing-Fast', 'Qing-Research']
+/** 内置模型（走默认 agent 配置；自定义模型经 modelStore 追加） */
+const BUILTIN_MODELS = ['Auto', 'Qing-Pro', 'Qing-Fast', 'Qing-Research']
+
+/** 当前选中的自定义模型 id（发送/重新生成时随 customModelId 传主进程；内置模型为 null） */
+const selectedCustomId = ref<string | null>(null)
+
+/** 模型下拉分组：内置 + 自定义（自定义模型名可重复，id 唯一，故按 id 传参） */
+const modelGroups = computed(() => [
+  { name: '内置模型', items: BUILTIN_MODELS.map((name) => ({ name, id: undefined as string | undefined })) },
+  { name: '自定义模型', items: modelStore.models.map((m) => ({ name: m.name, id: m.id })) }
+])
 
 // ── Methods ──
-const selectModel = (opt: string): void => {
-  model.value = opt
+const selectModel = (opt: { name: string; id?: string }): void => {
+  model.value = opt.name
+  selectedCustomId.value = opt.id ?? null
   modelOpen.value = false
 }
 
@@ -653,7 +669,12 @@ const sendMessage = (): void => {
   catalog.clearSkills()
   // 用户主动触发的消息动作：即使向上翻阅过也强制回到底部跟随
   atBottom.value = true
-  agentStore.sendMessage(content.trim(), { model: model.value }).catch((err: unknown) => {
+  agentStore
+    .sendMessage(content.trim(), {
+      model: model.value,
+      customModelId: selectedCustomId.value ?? undefined
+    })
+    .catch((err: unknown) => {
     console.error('[NewTaskPage] sendMessage failed:', err)
     // 失败时恢复输入内容（token 恢复为纯文本，与现状一致）
     const cur = getInputEl()
@@ -723,6 +744,8 @@ const handleDocumentClick = (e: MouseEvent): void => {
 
 onMounted(() => {
   document.addEventListener('mousedown', handleDocumentClick)
+  // 自定义模型列表（设置页新增后聊天页下拉同步刷新；失败静默保留旧值）
+  void modelStore.load()
 })
 
 onUnmounted(() => {
@@ -1091,26 +1114,37 @@ watch(
             </button>
             <Transition name="dropdown">
               <div v-if="modelOpen" class="model-dropdown">
-                <button
-                  v-for="opt in modelOptions"
-                  :key="opt"
-                  :class="['model-option', { 'model-option--active': model === opt }]"
-                  @click="selectModel(opt)"
+                <template
+                  v-for="group in modelGroups"
+                  :key="group.name"
                 >
-                  <svg
-                    v-if="model === opt"
-                    width="10"
-                    height="10"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="3"
+                  <div
+                    v-if="group.items.length > 0"
+                    class="model-group-label"
                   >
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  <span v-else class="model-option-gap"></span>
-                  {{ opt }}
-                </button>
+                    {{ group.name }}
+                  </div>
+                  <button
+                    v-for="opt in group.items"
+                    :key="opt.id ?? opt.name"
+                    :class="['model-option', { 'model-option--active': model === opt.name }]"
+                    @click="selectModel(opt)"
+                  >
+                    <svg
+                      v-if="model === opt.name"
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="3"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    <span v-else class="model-option-gap"></span>
+                    {{ opt.name }}
+                  </button>
+                </template>
               </div>
             </Transition>
           </div>
@@ -2399,13 +2433,23 @@ watch(
   position: absolute;
   bottom: calc(100% + 4px);
   right: 0;
-  min-width: 130px;
+  min-width: 160px;
+  max-height: 320px;
+  overflow-y: auto;
   background: #ffffff;
   border: 1px solid rgba(8, 145, 178, 0.15);
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  overflow: hidden;
   z-index: 20;
+}
+
+.model-group-label {
+  padding: 6px 12px 2px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .model-option {

@@ -8,7 +8,7 @@ const api = {
     conversationId: string,
     content: string,
     workspaceId?: string,
-    opts?: { regenerate?: boolean }
+    opts?: { regenerate?: boolean; model?: string; customModelId?: string }
   ): Promise<{ success: boolean; error?: string }> {
     return ipcRenderer.invoke('agent:send', conversationId, content, workspaceId, opts) as Promise<{
       success: boolean
@@ -138,6 +138,25 @@ const api = {
   },
   openDataDir() {
     return ipcRenderer.invoke('config:open-data-dir')
+  },
+  // ── 自定义模型 API（机器级配置）──
+  listModels() {
+    return ipcRenderer.invoke('model:list')
+  },
+  addModel(input: { id: string; name: string; vendor: string; url: string; apiKey: string }) {
+    return ipcRenderer.invoke('model:add', input)
+  },
+  removeModel(id: string) {
+    return ipcRenderer.invoke('model:remove', id)
+  },
+  updateModel(
+    id: string,
+    input: { id: string; name: string; vendor: string; url: string; apiKey: string }
+  ) {
+    return ipcRenderer.invoke('model:update', id, input)
+  },
+  listModelProviders() {
+    return ipcRenderer.invoke('model:list-providers')
   }
 }
 

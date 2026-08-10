@@ -19,12 +19,12 @@ export interface AgentAPI {
     authUrl: string,
     redirectUri: string
   ) => Promise<{ code?: string; error?: string }>
-  /** 发送消息：conversationId 由渲染层生成，主进程按会话合成 thread_id 并读取历史；workspaceId 为当前任务选择的工作空间；regenerate 表示重新生成最后一条回复（主进程截断旧回复） */
+  /** 发送消息：conversationId 由渲染层生成，主进程按会话合成 thread_id 并读取历史；workspaceId 为当前任务选择的工作空间；regenerate 表示重新生成最后一条回复（主进程截断旧回复）；customModelId 为自定义模型 id（缺省用默认模型，主进程校验归属） */
   sendAgentMessage(
     conversationId: string,
     content: string,
     workspaceId?: string,
-    opts?: { regenerate?: boolean }
+    opts?: { regenerate?: boolean; model?: string; customModelId?: string }
   ): Promise<{ success: boolean; error?: string }>
   cancelAgentMessage(): void
   onAgentChunk(callback: (chunk: string) => void): () => void
@@ -159,6 +159,56 @@ export interface ConfigAPI {
   openDataDir(): Promise<IpcResult<null>>
 }
 
+/** 自定义模型记录（models.json 元素；id 即 API 模型标识，name 为显示名） */
+export interface CustomModel {
+  id: string
+  name: string
+  vendor: string
+  url: string
+  apiKey: string
+  supportsToolCall: boolean
+  supportsImages: boolean
+  supportsReasoning: boolean
+  reasoning?: { defaultEffort: string; supportedEfforts: string[] }
+}
+
+/** 提供商（models.json 内 providers 元素；plans 为提供方式列表，models 为该家可提供的模型） */
+export interface ModelProvider {
+  id: string
+  /** 提供商中文名（如 深度求索） */
+  name: string
+  /** 提供商英文名（如 DeepSeek；无则不显示） */
+  nameEn?: string
+  /** LOGO 标识（ProviderLogo 组件按此渲染） */
+  logo: string
+  defaultUrl: string
+  plans: { type: string }[]
+  /** 该提供商可提供的模型列表（模型名称下拉数据源） */
+  models: string[]
+}
+
+export interface ModelAPI {
+  /** 全部自定义模型 */
+  listModels(): Promise<IpcResult<CustomModel[]>>
+  /** 添加自定义模型（主进程校验：id 唯一、url 格式等；失败返回 error） */
+  addModel(input: {
+    id: string
+    name: string
+    vendor: string
+    url: string
+    apiKey: string
+  }): Promise<IpcResult<CustomModel>>
+  /** 移除自定义模型（幂等） */
+  removeModel(id: string): Promise<IpcResult<null>>
+  /** 更新自定义模型（按 id 定位；id 本身不可改，其余字段可改） */
+  updateModel(
+    id: string,
+    input: { id: string; name: string; vendor: string; url: string; apiKey: string }
+  ): Promise<IpcResult<CustomModel>>
+  /** 提供商列表（models.json 内 providers；缺失时主进程用内置种子） */
+  listModelProviders(): Promise<IpcResult<ModelProvider[]>>
+}
+
 /** 渲染层可见的完整 API 形状 */
 export interface KeWorkWindowApi
   extends AgentAPI,
@@ -166,7 +216,8 @@ export interface KeWorkWindowApi
     ConversationAPI,
     ModeAPI,
     WorkspaceAPI,
-    ConfigAPI {}
+    ConfigAPI,
+    ModelAPI {}
 
 declare global {
   interface Window {

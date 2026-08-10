@@ -25,6 +25,8 @@ export interface AgentRunConfig {
   workspace_dir?: string
   /** 工作空间绑定（进 metadata，checkpoint 持久化后用于会话分组） */
   workspace?: WorkspaceBinding | null
+  /** 自定义模型 id（进 configurable，模型覆盖中间件读取；缺省用默认模型） */
+  modelOverride?: string
 }
 
 /** 会话消息转 LangChain 消息（带 DB/checkpoint id，addMessages reducer 按 id 去重防重复累积） */
@@ -86,7 +88,9 @@ export async function invokeSendMessage(
         thread_id: config.thread_id,
         user_id: config.user_id,
         // workspace_dir 进入 configurable：backend 工厂运行时据此创建 LocalShellBackend
-        ...(config.workspace_dir ? { workspace_dir: config.workspace_dir } : {})
+        ...(config.workspace_dir ? { workspace_dir: config.workspace_dir } : {}),
+        // model_override 进入 configurable：模型覆盖中间件运行期替换模型（只传 id，凭据不进 checkpoint）
+        ...(config.modelOverride ? { model_override: config.modelOverride } : {})
       },
       // workspace 绑定写入 checkpoint metadata（langgraph 持久化，会话列表据此分组）
       ...(config.workspace ? { metadata: { workspace: config.workspace } } : {})

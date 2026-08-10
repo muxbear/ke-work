@@ -32,6 +32,8 @@ import { MIGRATIONS_DIR } from './database/local/SqlMigrationRunner'
 import { SettingsStore } from './settings/SettingsStore'
 import { SettingsService, type ProxyMode } from './settings/SettingsService'
 import { registerConfigHandlers } from './ipc/config-handlers'
+import { registerModelHandlers } from './ipc/model-handlers'
+import { ModelService } from './model/ModelService'
 import { LastLaunchStore } from './state/LastLaunchStore'
 import { WorkspaceStateStore } from './state/WorkspaceStateStore'
 
@@ -134,13 +136,21 @@ app.whenReady().then(() => {
   })
   const session = new SessionService(dataDir.getBaseDir())
 
+  // ── 初始化自定义模型服务（机器级配置；providers.json 首启种子写入，用户可手改）──
+  const modelService = new ModelService(dataDir.getBaseDir())
+
   // ── 注册认证 IPC ──
   registerAuthHandlers(ipcMain, { authService, dataSourceFactory, session, cancelAllAgents })
 
   // ── 初始化智能体（AgentManager）──
   // checkpoint（短期记忆）与 store（长期记忆）与业务表共用 ke-work.db（SqliteSaver/SqliteStore 自建表）
   const appDbPath = join(dataDir.getBaseDir(), 'ke-work.db')
-  const agentManager = new AgentManager(dataDir.getDir('workspace'), appDbPath, appDbPath)
+  const agentManager = new AgentManager(
+    dataDir.getDir('workspace'),
+    appDbPath,
+    appDbPath,
+    modelService
+  )
   agentManager.init(mode).catch((err) => console.error('[main] agent init failed:', err))
 
   // ── 注册会话 IPC（基于 LangGraph checkpointer 的会话读写；自定义标题落本地业务表）──
@@ -208,6 +218,9 @@ app.whenReady().then(() => {
     { selectDir, openPath }
   )
   registerWorkspaceHandlers(ipcMain, { workspaceService, conversationStore, session })
+
+  // ── 自定义模型 IPC（机器级，models.json 本地文件）──
+  registerModelHandlers(ipcMain, { modelService })
 
   // ── 启动时应用设置（窗口创建前；顺序：工作空间基址 → 代理 → 锁屏）──
   void applyProxy(
@@ -284,10 +297,11 @@ app.whenReady().then(() => {
       ) {
         return { success: false, error: '参数错误' }
       }
-      const regenerate =
-        typeof opts === 'object' &&
-        opts !== null &&
-        (opts as { regenerate?: unknown }).regenerate === true
+      const optsObj =
+        typeof opts === 'object' && opts !== null ? (opts as Record<string, unknown>) : {}
+      const regenerate = optsObj.regenerate === true
+      // 自定义模型 id（渲染层不可信：经 getCredential 校验归属，伪造/已删除则忽略回退默认模型）
+      const customModelId = typeof optsObj.customModelId === 'string' ? optsObj.customModelId : undefined
 
       const controller = new AbortController()
       abortControllers.set(win.id, controller)
@@ -329,7 +343,11 @@ app.whenReady().then(() => {
             thread_id: conversationStore.buildThreadId(userId, conversationId),
             user_id: userId,
             workspace_dir: ws?.dir,
-            workspace: ws
+            workspace: ws,
+            // 自定义模型：仅当记录存在时生效（校验防伪造），否则走默认模型
+            ...(customModelId && modelService.getCredential(customModelId)
+              ? { modelOverride: customModelId }
+              : {})
           },
           controller.signal
         )

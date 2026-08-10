@@ -186,7 +186,7 @@ export const useAgentStore = defineStore('agent', () => {
     conv: Conversation,
     assistantMsg: Message,
     content: string,
-    opts: { mode: 'append' | 'regenerate' }
+    opts: { mode: 'append' | 'regenerate'; customModelId?: string }
   ): Promise<void> {
     const startedAt = Date.now()
 
@@ -238,7 +238,10 @@ export const useAgentStore = defineStore('agent', () => {
         conv.id,
         content,
         useWorkspaceStore().currentId ?? undefined,
-        { regenerate: opts.mode === 'regenerate' }
+        {
+          regenerate: opts.mode === 'regenerate',
+          customModelId: opts.customModelId
+        }
       )
       if (!result.success) {
         const msg = getAssistantMsg()
@@ -272,8 +275,12 @@ export const useAgentStore = defineStore('agent', () => {
    * 发送消息
    * @param content 消息内容
    * @param opts.model 生成所用模型（UI 展示快照）
+   * @param opts.customModelId 自定义模型 id（主进程校验归属后经模型覆盖中间件生效）
    */
-  async function sendMessage(content: string, opts?: { model?: string }): Promise<void> {
+  async function sendMessage(
+    content: string,
+    opts?: { model?: string; customModelId?: string }
+  ): Promise<void> {
     const conv = await ensureConversation()
 
     const userMsg: Message = {
@@ -298,14 +305,18 @@ export const useAgentStore = defineStore('agent', () => {
     isStreaming.value = true
     isThinking.value = true
 
-    await runStream(conv, assistantMsg, content, { mode: 'append' })
+    await runStream(conv, assistantMsg, content, {
+      mode: 'append',
+      customModelId: opts?.customModelId
+    })
   }
 
   /**
    * 重新生成：重发最后一条用户提问，生成新的 AI 回复（旧回复从 UI 与 checkpoint 中替换）
    * @param opts.model 生成所用模型
+   * @param opts.customModelId 自定义模型 id
    */
-  async function regenerate(opts?: { model?: string }): Promise<void> {
+  async function regenerate(opts?: { model?: string; customModelId?: string }): Promise<void> {
     if (isStreaming.value) return
     const conv = currentConversation.value
     if (!conv) return
@@ -323,7 +334,10 @@ export const useAgentStore = defineStore('agent', () => {
     isStreaming.value = true
     isThinking.value = true
 
-    await runStream(conv, assistantMsg, lastUser.content, { mode: 'regenerate' })
+    await runStream(conv, assistantMsg, lastUser.content, {
+      mode: 'regenerate',
+      customModelId: opts?.customModelId
+    })
   }
 
   function cancelMessage(): void {

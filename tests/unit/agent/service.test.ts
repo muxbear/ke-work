@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import type { BrowserWindow } from 'electron'
+import type { DeepAgent } from 'deepagents'
 import { RemoveMessage, HumanMessage } from '@langchain/core/messages'
-import { buildRegenerateInput } from '../../../src/main/agent/service'
+import { buildRegenerateInput, invokeSendMessage } from '../../../src/main/agent/service'
 import type { ConversationMessage } from '../../../src/main/agent/ConversationStore'
 
 function msg(id: string, role: ConversationMessage['role']): ConversationMessage {
@@ -47,5 +49,58 @@ describe('buildRegenerateInput（重新生成的图输入构造）', () => {
     const history = [msg('s1', 'system')]
     expect(buildRegenerateInput(history)).toEqual([])
     expect(buildRegenerateInput([])).toEqual([])
+  })
+})
+
+describe('invokeSendMessage（configurable 注入）', () => {
+  function createFakeWin(): BrowserWindow {
+    return { webContents: { send: vi.fn() } } as unknown as BrowserWindow
+  }
+
+  function createFakeAgent(streamEvents: ReturnType<typeof vi.fn>): DeepAgent {
+    return { streamEvents } as unknown as DeepAgent
+  }
+
+  function createEmptyStream(): { messages: never[] } {
+    return { messages: [] }
+  }
+
+  it('SVC-01: modelOverride 注入 configurable.model_override', async () => {
+    const streamEvents = vi.fn().mockResolvedValue(createEmptyStream())
+    await invokeSendMessage(
+      [],
+      createFakeWin(),
+      createFakeAgent(streamEvents),
+      { thread_id: 't1', user_id: 'u1', modelOverride: 'gpt-4o' }
+    )
+    const config = streamEvents.mock.calls[0][1] as { configurable: Record<string, unknown> }
+    expect(config.configurable.thread_id).toBe('t1')
+    expect(config.configurable.user_id).toBe('u1')
+    expect(config.configurable.model_override).toBe('gpt-4o')
+  })
+
+  it('SVC-02: 无 modelOverride 时 configurable 不含 model_override', async () => {
+    const streamEvents = vi.fn().mockResolvedValue(createEmptyStream())
+    await invokeSendMessage(
+      [],
+      createFakeWin(),
+      createFakeAgent(streamEvents),
+      { thread_id: 't1', user_id: 'u1' }
+    )
+    const config = streamEvents.mock.calls[0][1] as { configurable: Record<string, unknown> }
+    expect('model_override' in config.configurable).toBe(false)
+  })
+
+  it('SVC-03: workspace_dir 注入与 modelOverride 共存不冲突', async () => {
+    const streamEvents = vi.fn().mockResolvedValue(createEmptyStream())
+    await invokeSendMessage(
+      [],
+      createFakeWin(),
+      createFakeAgent(streamEvents),
+      { thread_id: 't1', user_id: 'u1', workspace_dir: '/ws', modelOverride: 'm1' }
+    )
+    const config = streamEvents.mock.calls[0][1] as { configurable: Record<string, unknown> }
+    expect(config.configurable.workspace_dir).toBe('/ws')
+    expect(config.configurable.model_override).toBe('m1')
   })
 })
