@@ -113,7 +113,7 @@ describe('useAgentStore（会话数据基于 LangGraph checkpoint）', () => {
     const convId = store.currentConversationId!
 
     // 启动 sendMessage（不 await），等待事件监听注册完成后模拟流式事件
-    const sendPromise = store.sendMessage('你好世界')
+    const sendPromise = store.sendMessage([{ type: 'text', text: '你好世界' }])
     await vi.waitFor(() => {
       expect(mock.api.onAgentChunk).toHaveBeenCalled()
       expect(mock.api.onAgentDone).toHaveBeenCalled()
@@ -133,14 +133,42 @@ describe('useAgentStore（会话数据基于 LangGraph checkpoint）', () => {
     expect(store.currentMessages[0].content).toBe('你好世界')
     expect(store.currentMessages[1].content).toBe('你好，世界！')
     expect(store.currentMessages[1].reasoning).toBe('思考中...')
-    // 主进程契约：conversationId + content + workspaceId（未选择空间时为 undefined）+ 发送模式
-    expect(mock.api.sendAgentMessage).toHaveBeenCalledWith(convId, '你好世界', undefined, {
-      regenerate: false
-    })
+    // 主进程契约：conversationId + 保序 parts + workspaceId（未选择空间时为 undefined）+ 发送模式
+    expect(mock.api.sendAgentMessage).toHaveBeenCalledWith(
+      convId,
+      [{ type: 'text', text: '你好世界' }],
+      undefined,
+      { regenerate: false }
+    )
     // 标题本地生成（第一条消息）
     expect(store.currentConversation?.title).toBe('你好世界')
     // 不再经 IPC 落库
     expect(mock.api.getConversation).not.toHaveBeenCalled()
+  })
+
+  it('sendMessage 文件段折叠为 📎 文件名，保序 parts 透传主进程', async () => {
+    const store = useAgentStore()
+    await store.createConversation()
+    const convId = store.currentConversationId!
+    const parts = [
+      { type: 'text' as const, text: '看' },
+      { type: 'file' as const, path: 'C:\\docs\\报告.md' }
+    ]
+
+    const sendPromise = store.sendMessage(parts)
+    await vi.waitFor(() => {
+      expect(mock.api.onAgentChunk).toHaveBeenCalled()
+      expect(mock.api.onAgentDone).toHaveBeenCalled()
+    })
+    ;(firstCallArg(mock.api.onAgentDone) as () => void)()
+    await sendPromise
+
+    // 用户气泡折叠显示：文本段原样 + 文件段「📎 文件名」
+    expect(store.currentMessages[0].content).toBe('看📎 报告.md')
+    // 主进程契约：保序 parts 原样透传（文件内容由主进程展开）
+    expect(mock.api.sendAgentMessage).toHaveBeenCalledWith(convId, parts, undefined, {
+      regenerate: false
+    })
   })
 
   it('sendMessage 失败时展示错误信息并保持消息流状态', async () => {
@@ -148,7 +176,7 @@ describe('useAgentStore（会话数据基于 LangGraph checkpoint）', () => {
     await store.createConversation()
     mock.api.sendAgentMessage.mockResolvedValueOnce({ success: false, error: '请求超时' })
 
-    await store.sendMessage('测试失败')
+    await store.sendMessage([{ type: 'text', text: '测试失败' }])
 
     expect(store.currentMessages[1].content).toBe('请求超时')
     expect(store.isStreaming).toBe(false)
@@ -189,25 +217,35 @@ describe('useAgentStore（会话数据基于 LangGraph checkpoint）', () => {
     const convId = store.currentConversationId!
 
     // 第一轮
-    const p1 = store.sendMessage('第一个问题')
+    const p1 = store.sendMessage([{ type: 'text', text: '第一个问题' }])
     await vi.waitFor(() => expect(mock.api.onAgentDone).toHaveBeenCalled())
     ;(firstCallArg(mock.api.onAgentDone) as () => void)()
     await p1
 
     // 第二轮
     mock.api.onAgentDone.mockClear()
-    const p2 = store.sendMessage('第二个问题')
+    const p2 = store.sendMessage([{ type: 'text', text: '第二个问题' }])
     await vi.waitFor(() => expect(mock.api.onAgentDone).toHaveBeenCalled())
     ;(firstCallArg(mock.api.onAgentDone) as () => void)()
     await p2
 
-    expect(store.currentMessages.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'assistant'])
+    expect(store.currentMessages.map((m) => m.role)).toEqual([
+      'user',
+      'assistant',
+      'user',
+      'assistant'
+    ])
 
     // regenerate：截断最后一条 AI 回复 + 新占位；user 消息数不变
     mock.api.sendAgentMessage.mockClear()
     mock.api.onAgentDone.mockClear()
     const regen = store.regenerate()
-    expect(store.currentMessages.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'assistant'])
+    expect(store.currentMessages.map((m) => m.role)).toEqual([
+      'user',
+      'assistant',
+      'user',
+      'assistant'
+    ])
     expect(store.currentMessages.filter((m) => m.role === 'user')).toHaveLength(2)
 
     await vi.waitFor(() => expect(mock.api.onAgentDone).toHaveBeenCalled())
@@ -225,7 +263,7 @@ describe('useAgentStore（会话数据基于 LangGraph checkpoint）', () => {
   it('regenerate 在流式进行中拒绝（不调用 IPC）', async () => {
     const store = useAgentStore()
     await store.createConversation()
-    const p = store.sendMessage('问题')
+    const p = store.sendMessage([{ type: 'text', text: '问题' }])
     await vi.waitFor(() => expect(mock.api.onAgentDone).toHaveBeenCalled())
     const doneHandler = firstCallArg(mock.api.onAgentDone) as () => void
 
