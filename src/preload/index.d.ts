@@ -7,6 +7,17 @@ export interface IpcResult<T> {
   error?: string
 }
 
+/** 输入消息部件：纯文本段或文件引用（路径；文件内容由主进程权威读取） */
+export interface MessageTextPart {
+  type: 'text'
+  text: string
+}
+export interface MessageFilePart {
+  type: 'file'
+  path: string
+}
+export type MessagePart = MessageTextPart | MessageFilePart
+
 export interface AuthResult {
   token: string
   refreshToken: string
@@ -211,13 +222,7 @@ export interface ModelAPI {
 
 /** 渲染层可见的完整 API 形状 */
 export interface KeWorkWindowApi
-  extends AgentAPI,
-    AuthAPI,
-    ConversationAPI,
-    ModeAPI,
-    WorkspaceAPI,
-    ConfigAPI,
-    ModelAPI {}
+  extends AgentAPI, AuthAPI, ConversationAPI, ModeAPI, WorkspaceAPI, ConfigAPI, ModelAPI {}
 
 declare global {
   interface Window {
