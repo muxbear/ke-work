@@ -8,6 +8,7 @@ import MessageContent from '@components/MessageContent.vue'
 import ChatSidePanel from '@components/ChatSidePanel.vue'
 import PlusMenu from '@components/PlusMenu.vue'
 import { useCatalogStore, type Mode, type SkillItem } from '@store/catalog'
+import type { MessagePart } from '../../../preload/index.d'
 
 const agentStore = useAgentStore()
 const workspaceStore = useWorkspaceStore()
@@ -36,17 +37,33 @@ const pendingExpertPromptSync = ref(false)
 /** 当前可见的输入框元素（欢迎态与对话态互斥挂载） */
 const getInputEl = (): HTMLElement | null => welcomeInputRef.value ?? chatInputRef.value
 
-/** 序列化输入框 DOM → 消息文本：文本节点原样；技能 token → /技能名；换行/富文本元素取文本 */
-const serializeInput = (el: HTMLElement): string => {
-  let out = ''
+/** 相邻文本段合并（减少 parts 数量；文件段自然分隔） */
+const pushTextPart = (parts: MessagePart[], text: string): void => {
+  const last = parts[parts.length - 1]
+  if (last && last.type === 'text') last.text += text
+  else parts.push({ type: 'text', text })
+}
+
+/** 序列化输入框 DOM → 保序消息部件：文本节点原样；技能 token → /技能名；文件 token → {type:'file',path} */
+const serializeInput = (el: HTMLElement): MessagePart[] => {
+  const parts: MessagePart[] = []
   for (const node of el.childNodes) {
-    if (node.nodeType === Node.TEXT_NODE) out += node.textContent ?? ''
-    else if (node instanceof HTMLElement && node.classList.contains('skill-token')) {
-      out += '/' + (node.dataset.name ?? node.textContent ?? '')
-    } else if (node.nodeName === 'BR') out += '\n'
-    else if (node instanceof HTMLElement) out += node.textContent ?? ''
+    if (node.nodeType === Node.TEXT_NODE) {
+      const t = node.textContent ?? ''
+      if (t) pushTextPart(parts, t)
+    } else if (node instanceof HTMLElement && node.classList.contains('skill-token')) {
+      pushTextPart(parts, '/' + (node.dataset.name ?? node.textContent ?? ''))
+    } else if (node instanceof HTMLElement && node.classList.contains('file-token')) {
+      const path = node.dataset.path
+      if (path) parts.push({ type: 'file', path })
+    } else if (node.nodeName === 'BR') {
+      pushTextPart(parts, '\n')
+    } else if (node instanceof HTMLElement) {
+      const t = node.textContent ?? ''
+      if (t) pushTextPart(parts, t)
+    }
   }
-  return out
+  return parts
 }
 
 /** 在光标处插入技能 token（无有效光标时追加到末尾），光标移到 token 后 */
@@ -115,6 +132,71 @@ const insertSkillTokenAtCaret = (el: HTMLElement, skill: SkillItem): void => {
   taskInput.value = el.innerText
 }
 
+/** 在光标处插入文件 token（图标 + 文件名；title 原生提示绝对路径），光标移到 token 后 */
+const insertFileTokenAtCaret = (el: HTMLElement, filePath: string): void => {
+  const sel = window.getSelection()
+  let range: Range
+  if (sel && sel.rangeCount > 0 && el.contains(sel.anchorNode)) {
+    range = sel.getRangeAt(0)
+    range.collapse(false)
+  } else {
+    range = document.createRange()
+    range.selectNodeContents(el)
+    range.collapse(false)
+  }
+  const token = document.createElement('span')
+  token.className = 'file-token'
+  token.dataset.path = filePath
+  token.title = filePath // 悬停显示绝对路径（原生 tooltip）
+  token.contentEditable = 'false'
+  const icon = document.createElement('span')
+  icon.className = 'file-token-icon'
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('width', '10')
+  svg.setAttribute('height', '10')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('fill', 'none')
+  svg.setAttribute('stroke', 'currentColor')
+  svg.setAttribute('stroke-width', '2')
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  path.setAttribute('d', 'M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z')
+  svg.appendChild(path)
+  const del = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  del.classList.add('file-token-del')
+  del.setAttribute('width', '10')
+  del.setAttribute('height', '10')
+  del.setAttribute('viewBox', '0 0 24 24')
+  del.setAttribute('fill', 'none')
+  del.setAttribute('stroke', 'currentColor')
+  del.setAttribute('stroke-width', '2.5')
+  del.setAttribute('stroke-linecap', 'round')
+  const l1 = document.createElementNS('http://www.w3.org/2000/svg', 'line')
+  l1.setAttribute('x1', '18')
+  l1.setAttribute('y1', '6')
+  l1.setAttribute('x2', '6')
+  l1.setAttribute('y2', '18')
+  const l2 = document.createElementNS('http://www.w3.org/2000/svg', 'line')
+  l2.setAttribute('x1', '6')
+  l2.setAttribute('y1', '6')
+  l2.setAttribute('x2', '18')
+  l2.setAttribute('y2', '18')
+  del.appendChild(l1)
+  del.appendChild(l2)
+  icon.appendChild(svg)
+  icon.appendChild(del)
+  const name = document.createElement('span')
+  name.className = 'file-token-name'
+  name.textContent = filePath.split(/[\\/]/).pop() || filePath
+  token.appendChild(icon)
+  token.appendChild(name)
+  range.insertNode(token)
+  range.setStartAfter(token)
+  range.collapse(true)
+  sel?.removeAllRanges()
+  sel?.addRange(range)
+  taskInput.value = el.innerText
+}
+
 /** 从 DOM 移除第一个指定技能的 token */
 const removeSkillTokenFromDom = (el: HTMLElement, id: number): void => {
   for (const node of Array.from(el.children)) {
@@ -139,17 +221,54 @@ const onSelectSkillToken = (id: number): void => {
   else removeSkillTokenFromDom(el, id)
 }
 
-/** 点击输入框内技能 token → 删除（hover 变 × 由 CSS 实现）；普通点击不拦截 */
+/** PlusMenu 选中本地文件 → 逐个即时校验（UX 前置），通过的在光标处插入文件 token */
+const onSelectFiles = async (paths: string[]): Promise<void> => {
+  const el = getInputEl()
+  if (!el) return
+  if (paths.length > FILE_MAX_COUNT) {
+    showToast(`单次最多选择 ${FILE_MAX_COUNT} 个文件`)
+    return
+  }
+  const accepted: string[] = []
+  for (const p of paths) {
+    const name = p.split(/[\\/]/).pop() ?? p
+    const ext = name.split('.').pop()?.toLowerCase() ?? ''
+    const isText = FILE_TEXT_EXTS.includes(ext)
+    const isImage = FILE_IMAGE_EXTS.includes(ext)
+    const isPdf = ext === 'pdf'
+    if (!isText && !isImage && !isPdf) {
+      showToast(`暂不支持该文件类型：${name}`)
+      continue
+    }
+    const res = await window.api.inspectFile(p)
+    if (!res.success) continue
+    const data = res.data
+    if (!data || !data.exists) {
+      showToast(`文件不存在：${name}`)
+      continue
+    }
+    const limit = isText ? FILE_MAX_TEXT_BYTES : isImage ? FILE_MAX_IMAGE_BYTES : FILE_MAX_PDF_BYTES
+    if (data.size > limit) {
+      showToast(`文件过大（上限 ${Math.round(limit / 1024 / 1024)}MB）：${name}`)
+      continue
+    }
+    accepted.push(p)
+  }
+  for (const p of accepted) insertFileTokenAtCaret(el, p)
+}
+
+/** 点击输入框内 token → 删除（技能 token 同步取消勾选；hover 变 × 由 CSS 实现）；普通点击不拦截 */
 const onInputClick = (e: MouseEvent): void => {
   const el = getInputEl()
   if (!el) return
-  const token = (e.target as HTMLElement).closest<HTMLElement>('.skill-token')
+  const token = (e.target as HTMLElement).closest<HTMLElement>('.skill-token, .file-token')
   if (!token) return
   e.preventDefault()
   const prevSibling = token.previousSibling
-  const id = Number(token.dataset.skillId)
+  if (token.classList.contains('skill-token')) {
+    catalog.toggleSkill(Number(token.dataset.skillId)) // 移除勾选，菜单勾选态同步消失
+  }
   token.remove()
-  catalog.toggleSkill(id) // 移除勾选，菜单勾选态同步消失
   taskInput.value = el.innerText
   const sel = window.getSelection()
   if (!sel) return
@@ -169,8 +288,15 @@ const onInputClick = (e: MouseEvent): void => {
 const onInputSync = (): void => {
   const el = getInputEl()
   if (!el) return
-  // 用户清空内容后浏览器可能残留 <br>，清掉让 :empty 占位符恢复
-  if (el.innerText.trim() === '' && el.innerHTML !== '') el.innerHTML = ''
+  // 用户清空内容后浏览器可能残留 <br>，清掉让 :empty 占位符恢复；
+  // 仅剩文件 token 时 innerText 为空但 DOM 非空，不可清空（contentEditable=false 不入 innerText）
+  if (
+    el.innerText.trim() === '' &&
+    el.innerHTML !== '' &&
+    !el.querySelector('.file-token')
+  ) {
+    el.innerHTML = ''
+  }
   taskInput.value = el.innerText
   // 对账：DOM 中不存在的 token 从勾选中移除（退格键/选择删除路径）
   const domIds = new Set(
@@ -633,6 +759,14 @@ const quickChips = [
   { icon: 'slides', label: '幻灯片' }
 ]
 
+// ── 文件附件：选中即时校验（主进程权威，此处为 UX 前置副本） ──
+const FILE_TEXT_EXTS = ['txt','md','csv','json','yaml','yml','xml','html','css','js','ts','jsx','tsx','py','java','c','cpp','h','go','rs','sh','sql','log','ini','toml']
+const FILE_IMAGE_EXTS = ['png','jpg','jpeg','gif','webp','bmp']
+const FILE_MAX_TEXT_BYTES = 5 * 1024 * 1024
+const FILE_MAX_PDF_BYTES = 20 * 1024 * 1024
+const FILE_MAX_IMAGE_BYTES = 10 * 1024 * 1024
+const FILE_MAX_COUNT = 10
+
 /** 内置模型（走默认 agent 配置；自定义模型经 modelStore 追加） */
 const BUILTIN_MODELS = ['Auto', 'Qing-Pro', 'Qing-Fast', 'Qing-Research']
 
@@ -660,8 +794,10 @@ const scrollChips = (dir: 'left' | 'right'): void => {
 
 const sendMessage = (): void => {
   const el = getInputEl()
-  const content = el ? serializeInput(el) : taskInput.value
-  if (!content.trim()) return
+  const parts = el ? serializeInput(el) : [{ type: 'text' as const, text: taskInput.value }]
+  const hasFile = parts.some((p) => p.type === 'file')
+  const text = parts.filter((p) => p.type === 'text').map((p) => p.text).join('').trim()
+  if (!hasFile && !text) return
   // 清空输入框（DOM + 快照 + 技能勾选 + 抑制挂载时提示词重插）
   if (el) el.textContent = ''
   taskInput.value = ''
@@ -670,17 +806,21 @@ const sendMessage = (): void => {
   // 用户主动触发的消息动作：即使向上翻阅过也强制回到底部跟随
   atBottom.value = true
   agentStore
-    .sendMessage(content.trim(), {
+    .sendMessage(parts, {
       model: model.value,
       customModelId: selectedCustomId.value ?? undefined
     })
     .catch((err: unknown) => {
-    console.error('[NewTaskPage] sendMessage failed:', err)
-    // 失败时恢复输入内容（token 恢复为纯文本，与现状一致）
-    const cur = getInputEl()
-    if (cur) cur.textContent = content.trim()
-    taskInput.value = content.trim()
-  })
+      console.error('[NewTaskPage] sendMessage failed:', err)
+      // 失败时恢复输入内容：仅恢复文本段（文件 token 不恢复，与现状 token 恢复为纯文本一致）
+      const restoreText = parts
+        .filter((p) => p.type === 'text')
+        .map((p) => p.text)
+        .join('')
+      const cur = getInputEl()
+      if (cur) cur.textContent = restoreText
+      taskInput.value = restoreText
+    })
 }
 
 // ── Workspace selector handlers ──
@@ -1192,6 +1332,7 @@ watch(
             <PlusMenu
               v-if="showInputPlusMenu"
               @select-skill="onSelectSkillToken"
+              @select-files="onSelectFiles"
               @close="showInputPlusMenu = false"
               @navigate="onPlusNavigate"
             />
@@ -2134,6 +2275,7 @@ watch(
                   v-if="showInputPlusMenu"
                   compact
                   @select-skill="onSelectSkillToken"
+                  @select-files="onSelectFiles"
                   @close="showInputPlusMenu = false"
                   @navigate="onPlusNavigate"
                 />
@@ -2702,6 +2844,61 @@ watch(
   font-size: 12px;
   color: #0e7490;
   white-space: nowrap;
+}
+
+/* 文件 token（contenteditable 输入框内：图标 + 文件名，hover 图标变删除，title 提示绝对路径）
+   注意：token 由 createElement 动态创建，无 scoped data-v 属性，选择器必须用 :deep() */
+:deep(.file-token) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  margin: 0 1px;
+  border: 1px solid rgba(8, 145, 178, 0.18);
+  border-radius: 999px;
+  background: rgba(8, 145, 178, 0.06);
+  cursor: pointer;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+:deep(.file-token-icon) {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #0e7490;
+  flex-shrink: 0;
+}
+
+:deep(.file-token-icon svg) {
+  transition: opacity 0.15s ease;
+}
+
+:deep(.file-token-del) {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  opacity: 0;
+}
+
+:deep(.file-token:hover .file-token-icon svg:first-child) {
+  opacity: 0;
+}
+
+:deep(.file-token:hover .file-token-del) {
+  opacity: 1;
+}
+
+:deep(.file-token-name) {
+  font-size: 12px;
+  color: #0e7490;
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Workspace selector */
