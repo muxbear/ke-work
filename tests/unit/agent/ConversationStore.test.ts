@@ -378,4 +378,58 @@ describe('ConversationStore 自定义标题（conversation_titles 表）', () =>
       .get('u1', 'c1')
     expect(row).toBeUndefined()
   })
+
+  it('deleteConversationsByWorkspace 删除绑定该空间的所有会话并返回数量', async () => {
+    const ds = new LocalDataSource(':memory:')
+    const tuples = [
+      makeTuple('u:u1:c1', [{ id: 'm1', role: 'human', content: 'A' }], new Date(100)),
+      makeTuple('u:u1:c2', [{ id: 'm1', role: 'human', content: 'B' }], new Date(200)),
+      makeTuple('u:u1:c3', [{ id: 'm1', role: 'human', content: 'C' }], new Date(300))
+    ]
+    const cp = makeCheckpointer(tuples)
+    const store = new ConversationStore(() => cp as never, () => ds.getDb())
+    store.bindWorkspace('u1', 'c1', { id: 'ws-2', name: '空间B' })
+    store.bindWorkspace('u1', 'c2', { id: 'ws-2', name: '空间B' })
+    store.bindWorkspace('u1', 'c3', { id: 'ws-1', name: '空间A' })
+
+    const deleted = await store.deleteConversationsByWorkspace('u1', 'ws-2')
+
+    expect(deleted).toBe(2)
+    // ws-2 的两个会话：checkpoint 已删，其他空间会话不受影响
+    expect(cp.deleteThread).toHaveBeenCalledWith('u:u1:c1')
+    expect(cp.deleteThread).toHaveBeenCalledWith('u:u1:c2')
+    expect(cp.deleteThread).not.toHaveBeenCalledWith('u:u1:c3')
+    const c1Row = ds
+      .getDb()
+      .prepare(
+        'SELECT COUNT(*) AS c FROM conversation_workspaces WHERE user_id = ? AND conversation_id = ?'
+      )
+      .get('u1', 'c1') as { c: number }
+    expect(c1Row.c).toBe(0)
+    // ws-1 的会话绑定不受影响
+    const c3Row = ds
+      .getDb()
+      .prepare(
+        'SELECT COUNT(*) AS c FROM conversation_workspaces WHERE user_id = ? AND conversation_id = ?'
+      )
+      .get('u1', 'c3') as { c: number }
+    expect(c3Row.c).toBe(1)
+    ds.close()
+  })
+
+  it('deleteConversationsByWorkspace 无绑定会话返回 0', async () => {
+    const ds = new LocalDataSource(':memory:')
+    const store = new ConversationStore(() => makeCheckpointer([]) as never, () => ds.getDb())
+    const deleted = await store.deleteConversationsByWorkspace('u1', 'ws-9')
+    expect(deleted).toBe(0)
+    ds.close()
+  })
+
+  it('deleteConversationsByWorkspace 无 db 时返回 0 且不调 deleteThread', async () => {
+    const cp = makeCheckpointer([])
+    const store = new ConversationStore(() => cp as never)
+    const deleted = await store.deleteConversationsByWorkspace('u1', 'ws-1')
+    expect(deleted).toBe(0)
+    expect(cp.deleteThread).not.toHaveBeenCalled()
+  })
 })

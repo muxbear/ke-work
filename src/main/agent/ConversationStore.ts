@@ -334,4 +334,22 @@ export class ConversationStore {
         .run(userId, conversationId)
     }
   }
+
+  /**
+   * 删除绑定到指定工作空间的全部会话（按 conversation_workspaces 业务表，逐个删 checkpoint/标题/绑定）；
+   * 仅 metadata 绑定（无业务表记录）的旧会话不在此范围，随空间记录删除后归默认空间；
+   * 中途失败时部分删除、不回滚（异常向上抛）；返回删除数量
+   */
+  async deleteConversationsByWorkspace(userId: string, workspaceId: string): Promise<number> {
+    if (!this.getDb) return 0
+    const rows = this.getDb()
+      .prepare(
+        'SELECT conversation_id FROM conversation_workspaces WHERE user_id = ? AND workspace_id = ?'
+      )
+      .all(userId, workspaceId) as Array<{ conversation_id: string }>
+    for (const row of rows) {
+      await this.deleteConversation(userId, row.conversation_id)
+    }
+    return rows.length
+  }
 }
