@@ -40,11 +40,20 @@ function getId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 9)
 }
 
-/** parts → 用户气泡显示文本：文件段折叠为「📎 文件名」（与主进程 parseBlocks 折叠结果一致） */
+/**
+ * parts → 用户气泡显示文本：文件段折叠为「📎 文件名」
+ * 折叠格式与主进程 parseBlocks/ConversationStore 一致，权威来源为 file-parts.expandFilePart
+ * 的「【文件：name】」标记，改动需同步
+ */
 function displayText(parts: MessagePart[] | string): string {
   if (typeof parts === 'string') return parts
   return parts
-    .map((p) => (p.type === 'text' ? p.text : `📎 ${p.path.split(/[\\/]/).pop() ?? p.path}`))
+    .map((p) => {
+      if (p.type === 'text') return p.text
+      // 尾分隔符路径（如 C:\docs\）pop 结果为空串 → 回退整路径
+      const name = p.path.split(/[\\/]/).pop()
+      return name ? `📎 ${name}` : p.path
+    })
     .join('')
 }
 

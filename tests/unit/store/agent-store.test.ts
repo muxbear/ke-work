@@ -171,6 +171,34 @@ describe('useAgentStore（会话数据基于 LangGraph checkpoint）', () => {
     })
   })
 
+  it('regenerate 透传折叠后的显示文本（字符串路径契约，非 parts 数组）', async () => {
+    const store = useAgentStore()
+    await store.createConversation()
+    const convId = store.currentConversationId!
+    const parts = [
+      { type: 'text' as const, text: '看' },
+      { type: 'file' as const, path: 'C:\\docs\\报告.md' }
+    ]
+
+    // 第一轮：含文件段的消息
+    const p1 = store.sendMessage(parts)
+    await vi.waitFor(() => expect(mock.api.onAgentDone).toHaveBeenCalled())
+    ;(firstCallArg(mock.api.onAgentDone) as () => void)()
+    await p1
+
+    // regenerate：主进程收到折叠后的字符串（与用户气泡一致），而非 parts 数组
+    mock.api.sendAgentMessage.mockClear()
+    mock.api.onAgentDone.mockClear()
+    const regen = store.regenerate()
+    await vi.waitFor(() => expect(mock.api.onAgentDone).toHaveBeenCalled())
+    ;(firstCallArg(mock.api.onAgentDone) as () => void)()
+    await regen
+
+    expect(mock.api.sendAgentMessage).toHaveBeenCalledWith(convId, '看📎 报告.md', undefined, {
+      regenerate: true
+    })
+  })
+
   it('sendMessage 失败时展示错误信息并保持消息流状态', async () => {
     const store = useAgentStore()
     await store.createConversation()
