@@ -6,11 +6,11 @@ const api = {
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
   sendAgentMessage(
     conversationId: string,
-    content: string,
+    parts: ({ type: 'text'; text: string } | { type: 'file'; path: string })[] | string,
     workspaceId?: string,
     opts?: { regenerate?: boolean; model?: string; customModelId?: string }
   ): Promise<{ success: boolean; error?: string }> {
-    return ipcRenderer.invoke('agent:send', conversationId, content, workspaceId, opts) as Promise<{
+    return ipcRenderer.invoke('agent:send', conversationId, parts, workspaceId, opts) as Promise<{
       success: boolean
       error?: string
     }>

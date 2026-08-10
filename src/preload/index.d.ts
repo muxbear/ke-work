@@ -30,10 +30,10 @@ export interface AgentAPI {
     authUrl: string,
     redirectUri: string
   ) => Promise<{ code?: string; error?: string }>
-  /** 发送消息：conversationId 由渲染层生成，主进程按会话合成 thread_id 并读取历史；workspaceId 为当前任务选择的工作空间；regenerate 表示重新生成最后一条回复（主进程截断旧回复）；customModelId 为自定义模型 id（缺省用默认模型，主进程校验归属） */
+  /** 发送消息：conversationId 由渲染层生成，主进程按会话合成 thread_id 并读取历史；parts 为保序消息部件（文本段 + 文件引用）或纯文本字符串；workspaceId 为当前任务选择的工作空间；regenerate 表示重新生成最后一条回复（主进程截断旧回复）；customModelId 为自定义模型 id（缺省用默认模型，主进程校验归属） */
   sendAgentMessage(
     conversationId: string,
-    content: string,
+    parts: MessagePart[] | string,
     workspaceId?: string,
     opts?: { regenerate?: boolean; model?: string; customModelId?: string }
   ): Promise<{ success: boolean; error?: string }>

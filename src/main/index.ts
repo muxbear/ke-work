@@ -12,6 +12,8 @@ import { join } from 'path'
 import { randomBytes, randomUUID } from 'crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { invokeSendMessage, toLangChainMessages, buildRegenerateInput } from './agent/service'
+import { expandFileParts, validateMessageParts } from './agent/file-parts'
+import type { MessagePart } from '../preload/index.d'
 import { summarizeTitle } from './agent/title-service'
 import { HumanMessage } from '@langchain/core/messages'
 import { detectOS } from './platform'
@@ -293,12 +295,7 @@ app.whenReady().then(() => {
         console.error('[main] No window found for event.sender')
         throw new Error('No window found')
       }
-      if (
-        typeof conversationId !== 'string' ||
-        !conversationId ||
-        typeof content !== 'string' ||
-        !content
-      ) {
+      if (typeof conversationId !== 'string' || !conversationId) {
         return { success: false, error: '参数错误' }
       }
       const optsObj =
@@ -306,6 +303,18 @@ app.whenReady().then(() => {
       const regenerate = optsObj.regenerate === true
       // 自定义模型 id（渲染层不可信：经 getCredential 校验归属，伪造/已删除则忽略回退默认模型）
       const customModelId = typeof optsObj.customModelId === 'string' ? optsObj.customModelId : undefined
+
+      // 消息内容归一：字符串（regenerate 历史文本）→ 单文本段；数组 → 形状校验（主进程权威）
+      // 校验失败返回错误对象（错误信息直达渲染层，避免 handle 拒绝丢失消息）
+      let parts: MessagePart[]
+      try {
+        parts =
+          typeof content === 'string'
+            ? [{ type: 'text', text: content }]
+            : validateMessageParts(content)
+      } catch (err) {
+        return { success: false, error: (err as Error).message || '参数错误' }
+      }
 
       const controller = new AbortController()
       abortControllers.set(win.id, controller)
@@ -322,7 +331,9 @@ app.whenReady().then(() => {
           // 重新生成：删除最后一条 user 之后的消息（RemoveMessage 命令），图继续生成新回复
           messages.push(...buildRegenerateInput(history))
         } else {
-          messages.push(new HumanMessage({ id: `msg-${randomUUID()}`, content }))
+          // 文件附件由主进程展开为内容块（读取/校验/转换失败整体抛错，错误信息含文件名）
+          const contentBlocks = await expandFileParts(parts)
+          messages.push(new HumanMessage({ id: `msg-${randomUUID()}`, content: contentBlocks }))
         }
 
         // 工作空间解析（主进程权威）：会话已绑定 > 渲染层当前选择 > null（backend 兜底默认目录）
