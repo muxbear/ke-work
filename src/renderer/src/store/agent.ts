@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 // 渲染层 window.api 类型（preload 的全局声明；node tsconfig 下需此处显式合并）
-import type { KeWorkWindowApi } from '../../../preload/index.d'
+import type { KeWorkWindowApi, MessagePart } from '../../../preload/index.d'
 import { useWorkspaceStore } from './workspace'
 
 declare global {
@@ -38,6 +38,14 @@ export interface Conversation {
  */
 function getId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 9)
+}
+
+/** parts → 用户气泡显示文本：文件段折叠为「📎 文件名」（与主进程 parseBlocks 折叠结果一致） */
+function displayText(parts: MessagePart[] | string): string {
+  if (typeof parts === 'string') return parts
+  return parts
+    .map((p) => (p.type === 'text' ? p.text : `📎 ${p.path.split(/[\\/]/).pop() ?? p.path}`))
+    .join('')
 }
 
 /**
@@ -185,7 +193,7 @@ export const useAgentStore = defineStore('agent', () => {
   async function runStream(
     conv: Conversation,
     assistantMsg: Message,
-    content: string,
+    parts: MessagePart[] | string,
     opts: { mode: 'append' | 'regenerate'; customModelId?: string }
   ): Promise<void> {
     const startedAt = Date.now()
@@ -236,7 +244,7 @@ export const useAgentStore = defineStore('agent', () => {
       // workspaceId：当前选择的工作空间；主进程对已绑定会话忽略该参数（绑定优先）
       const result = await window.api.sendAgentMessage(
         conv.id,
-        content,
+        parts,
         useWorkspaceStore().currentId ?? undefined,
         {
           regenerate: opts.mode === 'regenerate',
@@ -272,16 +280,17 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   /**
-   * 发送消息
-   * @param content 消息内容
+   * 发送消息（文件附件经保序 parts 传主进程展开）
+   * @param parts 输入消息部件（文本段 + 文件引用，顺序即原文位置）
    * @param opts.model 生成所用模型（UI 展示快照）
    * @param opts.customModelId 自定义模型 id（主进程校验归属后经模型覆盖中间件生效）
    */
   async function sendMessage(
-    content: string,
+    parts: MessagePart[],
     opts?: { model?: string; customModelId?: string }
   ): Promise<void> {
     const conv = await ensureConversation()
+    const content = displayText(parts)
 
     const userMsg: Message = {
       id: getId(),
@@ -305,7 +314,7 @@ export const useAgentStore = defineStore('agent', () => {
     isStreaming.value = true
     isThinking.value = true
 
-    await runStream(conv, assistantMsg, content, {
+    await runStream(conv, assistantMsg, parts, {
       mode: 'append',
       customModelId: opts?.customModelId
     })
