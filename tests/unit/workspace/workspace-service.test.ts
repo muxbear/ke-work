@@ -115,6 +115,37 @@ describe('WorkspaceService', () => {
       expect(a.id).toBe(b.id)
       expect(service.list('u1')).toHaveLength(1)
     })
+
+    it('改基址后迁移默认空间路径（id 不变，不新建第二条默认记录）', () => {
+      const old = service.ensureDefaultWorkspace()
+      // 模拟系统设置修改"默认工作空间存储路径"（setBaseDir 只换基址，不迁移记录）
+      const newBase = join(baseDir, 'new-base')
+      service.setBaseDir(newBase)
+      const ws = service.ensureDefaultWorkspace()
+      // 迁移：保留原记录 id（会话绑定/checkpoint 引用不失效），路径跟随新基址
+      expect(ws.id).toBe(old.id)
+      expect(ws.path).toBe(join(newBase, 'DefaultWorkspace'))
+      expect(existsSync(ws.path)).toBe(true)
+      // 列表仍只有一条默认记录
+      const defaults = service.list('u1').filter((r) => r.source === 'default')
+      expect(defaults).toHaveLength(1)
+    })
+
+    it('存量两条默认记录（历史 bug 遗留）时收敛为一条', () => {
+      const def = service.ensureDefaultWorkspace() // 当前基址记录
+      // 模拟历史遗留：改基址曾产生过的另一条默认记录（旧路径）
+      const legacy = repo.create({
+        name: '默认工作空间',
+        path: join(baseDir, 'legacy', 'DefaultWorkspace'),
+        source: 'default',
+        userId: null
+      })
+      const rows = service.list('u1')
+      const defaults = rows.filter((r) => r.source === 'default')
+      expect(defaults).toHaveLength(1)
+      expect(defaults[0].id).toBe(def.id)
+      expect(rows.map((r) => r.id)).not.toContain(legacy.id)
+    })
   })
 
   describe('createWorkspace', () => {
@@ -350,6 +381,24 @@ describe('WorkspaceService', () => {
       const ws = svc.createWorkspace('打开', 'u1')
       await svc.openWorkspace(ws.id, 'u1')
       expect(openPath).toHaveBeenCalledWith(ws.path)
+    })
+
+    it('默认空间打开其基址（与设置"默认工作空间存储路径"配置值一致）', async () => {
+      const openPath = vi.fn().mockResolvedValue(undefined)
+      const svc = new WorkspaceService(repo, baseDir, { openPath })
+      const def = svc.ensureDefaultWorkspace()
+      await svc.openWorkspace(def.id, 'u1')
+      expect(openPath).toHaveBeenCalledWith(baseDir)
+    })
+
+    it('改基址后默认空间打开新基址（跟随设置配置值）', async () => {
+      const openPath = vi.fn().mockResolvedValue(undefined)
+      const svc = new WorkspaceService(repo, baseDir, { openPath })
+      svc.ensureDefaultWorkspace()
+      const newBase = join(baseDir, 'new-base')
+      svc.setBaseDir(newBase)
+      await svc.openWorkspace(svc.ensureDefaultWorkspace().id, 'u1')
+      expect(openPath).toHaveBeenCalledWith(newBase)
     })
 
     it('id 不存在抛错', async () => {

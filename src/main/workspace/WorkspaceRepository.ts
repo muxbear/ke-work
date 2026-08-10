@@ -64,6 +64,24 @@ export class WorkspaceRepository {
     return row ? toWorkspaceRow(row) : undefined
   }
 
+  /** 任意默认空间记录（机器级唯一语义下取最早创建的一条作迁移目标） */
+  findDefaultSource(): WorkspaceRow | undefined {
+    const row = this.db
+      .prepare(`${SELECT_WS} WHERE source = 'default' ORDER BY created_at ASC, rowid ASC LIMIT 1`)
+      .get() as WorkspaceRowDb | undefined
+    return row ? toWorkspaceRow(row) : undefined
+  }
+
+  /** 迁移默认空间路径（改基址后跟随新位置；id 不变，会话绑定不失效） */
+  updatePath(id: string, path: string): void {
+    this.db.prepare('UPDATE workspaces SET path = ? WHERE id = ?').run(path, id)
+  }
+
+  /** 收敛多余默认记录（仅删记录，磁盘目录保留；保留 keepId 那条） */
+  removeOtherDefaults(keepId: string): void {
+    this.db.prepare("DELETE FROM workspaces WHERE source = 'default' AND id != ?").run(keepId)
+  }
+
   /** 无主记录定向接管（外部目录重复选择时把 NULL 记录归属当前用户；幂等） */
   adoptByPath(path: string, userId: string): void {
     this.db

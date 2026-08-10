@@ -93,13 +93,27 @@ export class WorkspaceService {
   }
 
   /**
-   * 默认工作空间：~/KeWork/DefaultWorkspace
-   * 已存在（如重启后再调用）则返回旧记录；记录 user_id 为 NULL，所有用户共享同一目录
+   * 默认工作空间：<基址>/DefaultWorkspace，机器级唯一（记录 user_id 为 NULL，所有用户共享）
+   * - 当前基址下已存在记录 → 收敛历史遗留的多余默认记录后返回
+   * - 存在旧基址留下的默认记录（改过"存储路径"）→ 迁移其 path 跟随新基址（id 不变，绑定不失效）
+   * - 完全不存在 → 创建目录并入库
    */
   ensureDefaultWorkspace(): WorkspaceRow {
     const dir = join(this.keWorkBaseDir, DEFAULT_WS_DIR)
     const existing = this.repo.findByPath(dir)
-    if (existing) return existing
+    if (existing) {
+      // 改基址曾产生的重复默认记录（仅删记录，磁盘目录保留）
+      this.repo.removeOtherDefaults(existing.id)
+      return existing
+    }
+    const otherDefault = this.repo.findDefaultSource()
+    if (otherDefault) {
+      console.log(`[workspace] migrate default workspace: ${otherDefault.path} -> ${dir}`)
+      mkdirSync(dir, { recursive: true })
+      this.repo.updatePath(otherDefault.id, dir)
+      this.repo.removeOtherDefaults(otherDefault.id)
+      return { ...otherDefault, path: dir }
+    }
     mkdirSync(dir, { recursive: true })
     console.log(`[workspace] created default directory: ${dir}`)
     return this.repo.create({ name: DEFAULT_WS_NAME, path: dir, source: 'default', userId: null })
@@ -161,9 +175,12 @@ export class WorkspaceService {
   async openWorkspace(id: string, userId: string): Promise<void> {
     const ws = this.repo.getById(id, userId)
     if (!ws) throw new Error('工作空间不存在')
-    if (!existsSync(ws.path)) throw new Error('工作空间目录不存在')
+    // 默认空间打开其基址（设置"默认工作空间存储路径"配置值，两处保持一致）；
+    // 普通空间打开各自目录
+    const target = ws.source === 'default' ? this.keWorkBaseDir : ws.path
+    if (!existsSync(target)) throw new Error('工作空间目录不存在')
     if (!this.deps.openPath) throw new Error('打开目录功能不可用')
-    await this.deps.openPath(ws.path)
+    await this.deps.openPath(target)
   }
 
   /**
