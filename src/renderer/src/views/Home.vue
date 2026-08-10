@@ -226,6 +226,24 @@ const deleteChat = async (id: string): Promise<void> => {
   }
 }
 
+// ── 删除任务确认 ──
+/** 待删除会话 id（非 null 时显示确认对话框） */
+const deleteTarget = ref<string | null>(null)
+
+/** 打开删除确认框（收起菜单；多语句收敛为方法，避免 prettier 模板折行问题） */
+const openDeleteDialog = (chatId: string): void => {
+  activeChatMenu.value = null
+  deleteTarget.value = chatId
+}
+
+/** 确认删除：立即关闭确认框，再走现有删除管线（先置空 target 防连点） */
+const confirmDeleteChat = async (): Promise<void> => {
+  if (!deleteTarget.value) return
+  const id = deleteTarget.value
+  deleteTarget.value = null
+  await deleteChat(id)
+}
+
 // ── 重命名会话 ──
 const renameTarget = ref<Conversation | null>(null)
 const renameTitle = ref('')
@@ -796,7 +814,7 @@ const adjustMenuDirection = (): void => {
                           <button
                             class="chat-menu-item chat-menu-item--danger"
                             type="button"
-                            @click.stop="deleteChat(chat.id)"
+                            @click.stop="openDeleteDialog(chat.id)"
                           >
                             <svg
                               width="14"
@@ -1048,6 +1066,15 @@ const adjustMenuDirection = (): void => {
       confirm-text="确认登出"
       @confirm="handleLogout"
       @cancel="showLogoutConfirm = false"
+    />
+
+    <!-- 删除任务确认弹窗（文案与 spec 一致；confirmText 用组件默认「确认」，红色危险风格） -->
+    <ConfirmDialog
+      v-if="deleteTarget"
+      title="删除任务"
+      message="确认从列表中删除任务吗？删除后对话记录无法恢复，请确认是否删除？"
+      @confirm="confirmDeleteChat"
+      @cancel="deleteTarget = null"
     />
 
     <!-- 设置窗口（置于 ConfirmDialog 之后：同层 z-index 按 DOM 顺序绘制，退出登录确认框盖在设置窗口之上） -->
