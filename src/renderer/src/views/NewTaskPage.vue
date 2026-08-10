@@ -2958,17 +2958,15 @@ watch(
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 48px 32px 16px;
+  /* 全宽滚动容器：滚动条贴右缘（右栏分割线），内容保持 760px 居中列（窄窗钳制 32px 留白） */
+  padding: 48px max(32px, calc((100% - 760px) / 2)) 16px;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  /* 细窄滚动条：内容不溢出时不显示，溢出时出现在消息区最右缘 */
+  /* 细窄滚动条：内容不溢出时不显示，溢出时出现在消息区最右缘（分割线旁） */
   scrollbar-width: thin;
   scrollbar-color: rgba(8, 145, 178, 0.28) transparent;
-  /* 靠中间对齐 + 两侧留白（max-width 与 margin auto 必须同写） */
   width: 100%;
-  max-width: 760px;
-  margin: 0 auto;
 }
 
 .chat-messages::-webkit-scrollbar {
