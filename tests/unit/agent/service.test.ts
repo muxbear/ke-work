@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 import type { DeepAgent } from 'deepagents'
-import { RemoveMessage, HumanMessage } from '@langchain/core/messages'
-import { buildRegenerateInput, invokeSendMessage } from '../../../src/main/agent/service'
+import { RemoveMessage, HumanMessage, AIMessage } from '@langchain/core/messages'
+import {
+  buildRegenerateInput,
+  invokeSendMessage,
+  toLangChainMessages
+} from '../../../src/main/agent/service'
 import type { ConversationMessage } from '../../../src/main/agent/ConversationStore'
 
 function msg(id: string, role: ConversationMessage['role']): ConversationMessage {
@@ -102,5 +106,33 @@ describe('invokeSendMessage（configurable 注入）', () => {
     const config = streamEvents.mock.calls[0][1] as { configurable: Record<string, unknown> }
     expect(config.configurable.workspace_dir).toBe('/ws')
     expect(config.configurable.model_override).toBe('m1')
+  })
+})
+
+describe('toLangChainMessages（rawContent 透传）', () => {
+  it('user 消息优先用 rawContent（文件块保序进图）', () => {
+    const rawContent = [
+      { type: 'text', text: '先' },
+      { type: 'text', text: '【文件：a.txt】\n内容\n【文件内容结束】' }
+    ]
+    const msgs = toLangChainMessages([
+      { id: 'u1', role: 'user', content: '先📎 a.txt', rawContent }
+    ])
+    expect(msgs[0]).toBeInstanceOf(HumanMessage)
+    expect((msgs[0] as HumanMessage).content).toEqual(rawContent)
+  })
+
+  it('无 rawContent（旧数据）回退字符串 content', () => {
+    const msgs = toLangChainMessages([{ id: 'u1', role: 'user', content: '普通文本' }])
+    expect((msgs[0] as HumanMessage).content).toBe('普通文本')
+  })
+
+  it('assistant/tool 消息不受影响', () => {
+    const msgs = toLangChainMessages([
+      { id: 'a1', role: 'assistant', content: '回复' },
+      { id: 't1', role: 'tool', content: '工具结果' }
+    ])
+    expect(msgs[0]).toBeInstanceOf(AIMessage)
+    expect((msgs[0] as AIMessage).content).toBe('回复')
   })
 })

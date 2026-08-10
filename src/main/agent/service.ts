@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import type { BaseMessage } from '@langchain/core/messages'
+import type { BaseMessage, MessageContent } from '@langchain/core/messages'
 import {
   HumanMessage,
   AIMessage,
@@ -34,7 +34,12 @@ export function toLangChainMessages(messages: ConversationMessage[]): BaseMessag
   return messages.map((m) => {
     switch (m.role) {
       case 'user':
-        return new HumanMessage({ id: m.id, content: m.content })
+        // rawContent（文件附件块数组）优先透传，保序进图；旧数据回退折叠字符串
+        // （rawContent 类型为 unknown，运行时是 checkpoint content 原样保留的块数组，断言 MessageContent）
+        return new HumanMessage({
+          id: m.id,
+          content: (m.rawContent ?? m.content) as MessageContent
+        })
       case 'assistant':
         return new AIMessage({ id: m.id, content: m.content })
       case 'tool':

@@ -502,4 +502,41 @@ describe('getMessages 折叠文件附件块（📎 文件名）', () => {
     expect(messages[0].content).toBe('旧格式文本')
     expect(messages[0].rawContent).toBeUndefined()
   })
+
+  it('游离 image_url（无标记块前置）→ 📎 图片', async () => {
+    const tuples = [
+      makeTuple('u:u1:c1', [
+        {
+          id: 'm1',
+          role: 'human',
+          content: [
+            { type: 'text', text: '说明' },
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,xxx' } }
+          ]
+        }
+      ], new Date(100))
+    ]
+    const store = new ConversationStore(() => makeCheckpointer(tuples) as never)
+    const messages = await store.getMessages('u1', 'c1')
+    expect(messages[0].content).toBe('说明📎 图片')
+  })
+
+  it('标记块后 tool_use 重置消费状态，后续 image_url 独立显示', async () => {
+    const tuples = [
+      makeTuple('u:u1:c1', [
+        {
+          id: 'm1',
+          role: 'human',
+          content: [
+            { type: 'text', text: '【文件：图.png】' },
+            { type: 'tool_use', id: 't', name: 'x', input: {} },
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,xxx' } }
+          ]
+        }
+      ], new Date(100))
+    ]
+    const store = new ConversationStore(() => makeCheckpointer(tuples) as never)
+    const messages = await store.getMessages('u1', 'c1')
+    expect(messages[0].content).toBe('📎 图.png📎 图片')
+  })
 })

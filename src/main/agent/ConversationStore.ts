@@ -28,6 +28,7 @@ export interface ConversationMessage {
   rawContent?: unknown
 }
 
+// 标记格式的权威来源是 file-parts.expandFilePart，改动需同步
 /** 文本文件块：`【文件：name】\n…内容…\n【文件内容结束】` */
 const FILE_CONTENT_RE = /^【文件：(.+?)】\n[\s\S]*?\n【文件内容结束】$/
 /** 图片标记块（无内容体，后随 image_url 二元组）：`【文件：name】` */
@@ -61,7 +62,11 @@ function parseBlocks(content: unknown): { content: string; reasoning?: string } 
   const reasoningParts: string[] = []
   let consumeNextImage = false
   for (const block of content) {
-    if (typeof block !== 'object' || block === null) continue
+    if (typeof block !== 'object' || block === null) {
+      // 非对象块（防御性分支）也重置消费状态，对齐「其余块重置」spec
+      consumeNextImage = false
+      continue
+    }
     const b = block as { type?: string; text?: unknown; reasoning?: unknown }
     if (b.type === 'text' && typeof b.text === 'string') {
       const collapsed = collapseFileBlock(b.text)

@@ -121,6 +121,7 @@ async function expandFilePart(path: string): Promise<FileContentBlock[]> {
 
   if (kind === 'text') {
     const { content, truncated } = await loadFileText(path, getExt(path))
+    // 标记格式与 ConversationStore.parseBlocks 的折叠正则耦合，改动需同步
     return [
       {
         type: 'text',
@@ -138,6 +139,7 @@ async function expandFilePart(path: string): Promise<FileContentBlock[]> {
     ]
   }
   // 图片：标记文本块 + image_url 块（连续二元组，显示端折叠回文件名）
+  // 标记格式与 ConversationStore.parseBlocks 的折叠正则耦合，改动需同步
   const mime = IMAGE_MIME[getExt(path)] ?? 'application/octet-stream'
   const data = await readFile(path)
   return [
