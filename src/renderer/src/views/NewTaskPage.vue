@@ -320,6 +320,47 @@ const onInputDrop = (e: DragEvent): void => {
   void onSelectFiles(paths)
 }
 
+// ── AI 改写润色：调用大模型改写输入框纯文本内容 ──
+const polishing = ref(false)
+
+/** 点击「AI 改写润色」：校验 → 主进程调 LLM → 改写结果替换输入内容（含 token 时拒绝） */
+const onPolishClick = async (): Promise<void> => {
+  if (polishing.value) return
+  const el = getInputEl()
+  if (!el) return
+  const text = el.innerText.trim()
+  if (!text) {
+    showToast('请先输入要改写的内容')
+    return
+  }
+  if (el.querySelector('.skill-token, .file-token')) {
+    showToast('改写仅支持纯文本，请先移除文件或技能标记')
+    return
+  }
+  polishing.value = true
+  try {
+    const res = await window.api.polishText(text)
+    if (!res.success || res.data === undefined) {
+      throw new Error(res.error || '改写失败')
+    }
+    // 改写结果替换输入内容（textContent 保留换行，white-space: pre-wrap 直接渲染）
+    el.textContent = res.data
+    taskInput.value = el.innerText
+    // 光标移到末尾并保持焦点（改写后即可继续输入/发送）
+    const sel = window.getSelection()
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    range.collapse(false)
+    sel?.removeAllRanges()
+    sel?.addRange(range)
+    el.focus()
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : '改写失败，请重试')
+  } finally {
+    polishing.value = false
+  }
+}
+
 /** 点击输入框内 token → 删除（技能 token 同步取消勾选；hover 变 × 由 CSS 实现）；普通点击不拦截 */
 const onInputClick = (e: MouseEvent): void => {
   const el = getInputEl()
@@ -1349,7 +1390,13 @@ watch(
             </span>
             <span class="expert-chip-name">{{ catalog.selectedExpert.name }}</span>
           </div>
-          <button class="toolbar-btn">
+          <button
+            class="toolbar-btn"
+            :class="{ 'toolbar-btn--polishing': polishing }"
+            :disabled="polishing"
+            title="AI 改写润色"
+            @click="onPolishClick"
+          >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
               <path d="M9 2L13 7H5L9 2Z" fill="#0891b2" opacity="0.7" />
               <path d="M9 16L13 11H5L9 16Z" fill="#0891b2" opacity="0.9" />
@@ -2759,6 +2806,22 @@ watch(
 
 .input-toolbar--compact {
   padding: 0 8px 10px;
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* AI 改写润色：请求中转圈 */
+.toolbar-btn--polishing svg {
+  animation: polish-spin 0.8s linear infinite;
+}
+
+@keyframes polish-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .toolbar-btn {

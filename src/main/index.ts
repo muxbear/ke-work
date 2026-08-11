@@ -15,6 +15,7 @@ import { invokeSendMessage, toLangChainMessages, buildRegenerateInput } from './
 import { expandFileParts, normalizeMessageInput } from './agent/file-parts'
 import type { MessagePart } from '../preload/index.d'
 import { summarizeTitle } from './agent/title-service'
+import { polishText, POLISH_MAX_TEXT_CHARS } from './agent/polish-service'
 import { HumanMessage } from '@langchain/core/messages'
 import { detectOS } from './platform'
 import { getDataDirectory, initDataDirectory, migrateLegacyConfigFiles } from './data-dir'
@@ -375,6 +376,24 @@ app.whenReady().then(() => {
       }
     }
   )
+
+  // AI 改写润色（登录态；单次 LLM 请求，非流式；入参校验 + 长度上限主进程权威）
+  ipcMain.handle('agent:polish', async (_event, text: unknown) => {
+    try {
+      session.requireUserId()
+      if (typeof text !== 'string' || !text.trim()) {
+        return { success: false, error: '请输入要改写的内容' }
+      }
+      if (text.length > POLISH_MAX_TEXT_CHARS) {
+        return { success: false, error: `改写内容过长（上限 ${POLISH_MAX_TEXT_CHARS} 字符）` }
+      }
+      const polished = await polishText(text)
+      return { success: true, data: polished }
+    } catch (err) {
+      console.error('[main] agent:polish failed:', err)
+      return { success: false, error: (err as Error).message || '改写失败' }
+    }
+  })
 
   // Agent cancel handler
   ipcMain.on('agent:cancel', (event) => {

@@ -60,6 +60,14 @@ const api = {
   getPathForFile(file: File): string {
     return webUtils.getPathForFile(file)
   },
+  /** AI 改写润色输入文本（主进程调 LLM，非流式；data 为改写结果） */
+  polishText(text: string) {
+    return ipcRenderer.invoke('agent:polish', text) as Promise<{
+      success: boolean
+      error?: string
+      data?: string
+    }>
+  },
   // ── 认证 API ──
   loginByPassword(account: string, password: string) {
     return ipcRenderer.invoke('auth:login-password', account, password)

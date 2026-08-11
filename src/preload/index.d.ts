@@ -50,6 +50,8 @@ export interface AgentAPI {
   }>>
   /** 获取文件选择器选中文件的绝对路径（Electron 39 起 File.path 已移除，须走 webUtils） */
   getPathForFile(file: File): string
+  /** AI 改写润色输入文本（主进程调 LLM，非流式）；data 为改写结果 */
+  polishText(text: string): Promise<IpcResult<string>>
 }
 
 export interface AuthAPI {
