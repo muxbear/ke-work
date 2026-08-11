@@ -189,6 +189,8 @@ describe('E2E 文件附件', () => {
     expect(replyText.length).toBeGreaterThan(0)
     // 排除调用失败的兜底文案（成功断言：真实模型回复而非错误提示）
     expect(replyText).not.toBe('抱歉，请求出错了，请重试')
+    // 文件内容进模型的真实证据：附件内容为「这是附件内容，请总结它。」，收到文件的模型必然提及关键词
+    expect(replyText).toContain('附件')
   }, 120_000)
 
   it('仅文件无文本发送：气泡只有「📎 文件名」', async () => {
