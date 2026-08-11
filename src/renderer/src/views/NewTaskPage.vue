@@ -269,6 +269,57 @@ const onSelectFiles = async (paths: string[]): Promise<void> => {
   for (const p of accepted) insertFileTokenAtCaret(el, p)
 }
 
+// ── 拖拽文件入输入框（效果与「+ → 添加文件 → 本地文件」一致） ──
+const inputDragging = ref(false)
+let fileDragDepth = 0
+
+/** 仅响应文件拖拽（文本拖拽保留浏览器默认插入） */
+const isFileDrag = (e: DragEvent): boolean => !!e.dataTransfer?.types.includes('Files')
+
+/** 拖入输入框：高亮提示可放置（dragenter/dragleave 在子节点间冒泡，用深度计数防闪烁） */
+const onInputDragEnter = (e: DragEvent): void => {
+  e.preventDefault()
+  if (!isFileDrag(e)) return
+  fileDragDepth++
+  inputDragging.value = true
+}
+
+/** 持续派发时阻止默认（否则 drop 不被允许） */
+const onInputDragOver = (e: DragEvent): void => {
+  e.preventDefault()
+}
+
+const onInputDragLeave = (e: DragEvent): void => {
+  if (!isFileDrag(e)) return
+  fileDragDepth = Math.max(0, fileDragDepth - 1)
+  if (fileDragDepth === 0) inputDragging.value = false
+}
+
+/** 松手：光标定位到拖放点，解析真实路径后复用 onSelectFiles 的校验与插入管线 */
+const onInputDrop = (e: DragEvent): void => {
+  fileDragDepth = 0
+  inputDragging.value = false
+  const files = Array.from(e.dataTransfer?.files ?? [])
+  if (!files.length) return // 文本拖拽：不做拦截，保留浏览器默认插入
+  e.preventDefault()
+  const el = getInputEl()
+  if (!el) return
+  // 光标定位到拖放点（caretRangeFromPoint 为 Chromium 扩展 API，Electron 可用）
+  const range = document.caretRangeFromPoint(e.clientX, e.clientY)
+  if (range) {
+    const sel = window.getSelection()
+    sel?.removeAllRanges()
+    sel?.addRange(range)
+  }
+  // Electron 39 起 File.path 已移除：经 preload 的 webUtils.getPathForFile 解析真实路径
+  const paths = files.map((f) => window.api.getPathForFile(f)).filter((p): p is string => !!p)
+  if (!paths.length) {
+    showToast('无法读取文件，请从本地文件夹重新拖入')
+    return
+  }
+  void onSelectFiles(paths)
+}
+
 /** 点击输入框内 token → 删除（技能 token 同步取消勾选；hover 变 × 由 CSS 实现）；普通点击不拦截 */
 const onInputClick = (e: MouseEvent): void => {
   const el = getInputEl()
@@ -1226,11 +1277,16 @@ watch(
         <div
           ref="welcomeInputRef"
           class="task-textarea"
+          :class="{ 'task-textarea--dragging': inputDragging }"
           contenteditable="true"
           data-placeholder="今天帮你做些什么？  @ 引用对话文件，/ 调用技能与指令"
           @input="onInputSync"
           @click="onInputClick"
           @keydown.enter.exact.prevent="sendMessage"
+          @dragenter="onInputDragEnter"
+          @dragover="onInputDragOver"
+          @dragleave="onInputDragLeave"
+          @drop="onInputDrop"
         ></div>
         <div v-if="selectionChips.length" class="selection-chips">
           <span
@@ -2325,11 +2381,16 @@ watch(
             <div
               ref="chatInputRef"
               class="task-textarea task-textarea--compact"
+              :class="{ 'task-textarea--dragging': inputDragging }"
               contenteditable="true"
               data-placeholder="继续输入…"
               @input="onInputSync"
               @click="onInputClick"
               @keydown.enter.exact.prevent="sendMessage"
+              @dragenter="onInputDragEnter"
+              @dragover="onInputDragOver"
+              @dragleave="onInputDragLeave"
+              @drop="onInputDrop"
             ></div>
             <div v-if="selectionChips.length" class="selection-chips selection-chips--compact">
               <span
@@ -2666,6 +2727,14 @@ watch(
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* 拖拽文件悬停输入框：虚线高亮提示可放置 */
+.task-textarea--dragging {
+  outline: 2px dashed #0891b2;
+  outline-offset: -2px;
+  border-radius: 8px;
+  background: rgba(8, 145, 178, 0.05);
 }
 
 .task-textarea:empty::before {
