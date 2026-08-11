@@ -225,12 +225,14 @@ const onSelectSkillToken = (id: number): void => {
 const onSelectFiles = async (paths: string[]): Promise<void> => {
   const el = getInputEl()
   if (!el) return
-  if (paths.length > FILE_MAX_COUNT) {
+  // 去重：同一文件多次选择只插一个 token（恢复旧 chips 去重语义）
+  const uniquePaths = [...new Set(paths)]
+  if (uniquePaths.length > FILE_MAX_COUNT) {
     showToast(`单次最多选择 ${FILE_MAX_COUNT} 个文件`)
     return
   }
   const accepted: string[] = []
-  for (const p of paths) {
+  for (const p of uniquePaths) {
     const name = p.split(/[\\/]/).pop() ?? p
     const ext = name.split('.').pop()?.toLowerCase() ?? ''
     const isText = FILE_TEXT_EXTS.includes(ext)
@@ -241,19 +243,29 @@ const onSelectFiles = async (paths: string[]): Promise<void> => {
       continue
     }
     const res = await window.api.inspectFile(p)
-    if (!res.success) continue
+    if (!res.success) {
+      showToast(res.error ?? '文件校验失败')
+      continue
+    }
     const data = res.data
     if (!data || !data.exists) {
       showToast(`文件不存在：${name}`)
       continue
     }
-    const limit = isText ? FILE_MAX_TEXT_BYTES : isImage ? FILE_MAX_IMAGE_BYTES : FILE_MAX_PDF_BYTES
+    if (data.kind === 'unsupported') {
+      // 主进程权威分类兜底（防两份扩展名列表漂移）
+      showToast(`暂不支持该文件类型：${name}`)
+      continue
+    }
+    const limit = data.kind === 'text' ? FILE_MAX_TEXT_BYTES : data.kind === 'image' ? FILE_MAX_IMAGE_BYTES : FILE_MAX_PDF_BYTES
     if (data.size > limit) {
       showToast(`文件过大（上限 ${Math.round(limit / 1024 / 1024)}MB）：${name}`)
       continue
     }
     accepted.push(p)
   }
+  // await 期间输入框可能已卸载（页面切换），守卫防插入到游离 DOM
+  if (!el.isConnected) return
   for (const p of accepted) insertFileTokenAtCaret(el, p)
 }
 
@@ -288,8 +300,9 @@ const onInputClick = (e: MouseEvent): void => {
 const onInputSync = (): void => {
   const el = getInputEl()
   if (!el) return
-  // 用户清空内容后浏览器可能残留 <br>，清掉让 :empty 占位符恢复；
-  // 仅剩文件 token 时 innerText 为空但 DOM 非空，不可清空（contentEditable=false 不入 innerText）
+  // 用户清空内容后浏览器可能残留 <br>，清掉让 :empty 占位符恢复。
+  // 注意：Chromium 的 innerText 包含 contentEditable=false 的 token 文本，因此仅剩文件 token 时
+  // innerText 非空、守卫不触发——querySelector 分支是防御未来 token 渲染变化（如 display:none），非当前承重。
   if (
     el.innerText.trim() === '' &&
     el.innerHTML !== '' &&
