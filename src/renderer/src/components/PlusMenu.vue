@@ -16,6 +16,7 @@ const emit = defineEmits<{
   close: []
   navigate: [tab: CatalogTab]
   'select-skill': [id: number]
+  'select-files': [paths: string[]]
 }>()
 
 const store = useCatalogStore()
@@ -84,10 +85,11 @@ const pickLocalFiles = (): void => {
 const onFilesSelected = (e: Event): void => {
   const input = e.target as HTMLInputElement
   const files = Array.from(input.files ?? [])
-  if (files.length) {
-    // Electron 下 File 带 path；无 path 时回退文件名
-    store.addLocalFiles(files.map((f) => (f as File & { path?: string }).path || f.name))
-  }
+  // Electron 下 File 带 path；无 path（浏览器环境）直接丢弃
+  const paths = files
+    .map((f) => (f as File & { path?: string }).path)
+    .filter((p): p is string => !!p)
+  if (paths.length) emit('select-files', paths)
   input.value = '' // 清空以便重复选择同一文件
   emit('close')
 }

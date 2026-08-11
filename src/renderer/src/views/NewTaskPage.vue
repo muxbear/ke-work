@@ -365,26 +365,18 @@ const MODE_LABELS: Record<Mode, string> = {
 interface SelectionChip {
   key: string
   label: string
-  kind: 'mode' | 'file'
-  path?: string
+  kind: 'mode'
 }
 
-/** 输入卡左上角 chips：模式(非默认) + 已挂载文件（技能 token 已移入输入框） */
+/** 输入卡左上角 chips：模式（非默认）——文件已改为输入框内联 token，不再显示 chips */
 const selectionChips = computed<SelectionChip[]>(() => {
-  const chips: SelectionChip[] = []
-  if (catalog.mode !== 'default') {
-    chips.push({ key: 'mode', label: `模式 · ${MODE_LABELS[catalog.mode]}`, kind: 'mode' })
-  }
-  for (const f of catalog.attachedFiles) {
-    chips.push({ key: `file-${f.path}`, label: f.name, kind: 'file', path: f.path })
-  }
-  return chips
+  if (catalog.mode === 'default') return []
+  return [{ key: 'mode', label: `模式 · ${MODE_LABELS[catalog.mode]}`, kind: 'mode' }]
 })
 
 /** 点击 chip 移除对应选择（模式回默认） */
 const removeChip = (chip: SelectionChip): void => {
   if (chip.kind === 'mode') catalog.setMode('default')
-  else if (chip.kind === 'file' && chip.path) catalog.removeFile(chip.path)
 }
 
 /** 移除专家选择（提示词由 watcher 从输入框移除） */

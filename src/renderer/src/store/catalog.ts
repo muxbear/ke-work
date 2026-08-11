@@ -38,11 +38,6 @@ export interface ConnectorItem {
   connected: boolean
 }
 
-export interface AttachedFile {
-  name: string
-  path: string
-}
-
 /** 本地文件（专家页数据同源，此处唯一声明，ExpertPage 引用） */
 export const experts: Expert[] = [
   {
@@ -319,8 +314,6 @@ export const useCatalogStore = defineStore('catalog', () => {
   const selectedSkillIds = ref<number[]>([])
   /** 最近使用专家 id（最近在前，上限 5） */
   const recentExpertIds = ref<number[]>(loadPersisted().recentExpertIds)
-  /** 已挂载本地文件（任务级，不持久化） */
-  const attachedFiles = ref<AttachedFile[]>([])
   /** 连接器定位目标（一次性：跳转后高亮对应授权连接卡片） */
   const focusConnectorId = ref<number | null>(null)
 
@@ -395,20 +388,6 @@ export const useCatalogStore = defineStore('catalog', () => {
     selectedSkillIds.value = []
   }
 
-  /** 追加本地文件（系统选择器选中后调用） */
-  function addLocalFiles(paths: string[]): void {
-    for (const p of paths) {
-      if (!p || attachedFiles.value.some((f) => f.path === p)) continue
-      const name = p.split(/[\\/]/).pop() || p
-      attachedFiles.value = [...attachedFiles.value, { name, path: p }]
-    }
-  }
-
-  /** 移除本地文件 */
-  function removeFile(path: string): void {
-    attachedFiles.value = attachedFiles.value.filter((f) => f.path !== path)
-  }
-
   /** 跳转到专家·技能·连接器页某标签页 */
   function gotoTab(tab: CatalogTab): void {
     pageTab.value = tab
@@ -438,7 +417,6 @@ export const useCatalogStore = defineStore('catalog', () => {
     selectedExpertPrompt,
     selectedSkillIds,
     recentExpertIds,
-    attachedFiles,
     focusConnectorId,
     // 计算
     selectedExpert,
@@ -451,8 +429,6 @@ export const useCatalogStore = defineStore('catalog', () => {
     clearExpert,
     toggleSkill,
     clearSkills,
-    addLocalFiles,
-    removeFile,
     gotoTab,
     gotoConnector
   }
