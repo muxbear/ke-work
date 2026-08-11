@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, webFrame } from 'electron'
+import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 // Custom APIs for renderer
@@ -55,6 +55,10 @@ const api = {
   // ── 文件附件 API ──
   inspectFile(path: string) {
     return ipcRenderer.invoke('file:inspect', path)
+  },
+  /** 获取文件选择器选中文件的绝对路径（Electron 39 已移除 File.path，须走 webUtils） */
+  getPathForFile(file: File): string {
+    return webUtils.getPathForFile(file)
   },
   // ── 认证 API ──
   loginByPassword(account: string, password: string) {

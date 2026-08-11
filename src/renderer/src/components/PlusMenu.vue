@@ -85,10 +85,9 @@ const pickLocalFiles = (): void => {
 const onFilesSelected = (e: Event): void => {
   const input = e.target as HTMLInputElement
   const files = Array.from(input.files ?? [])
-  // Electron 下 File 带 path；无 path（浏览器环境）直接丢弃
-  const paths = files
-    .map((f) => (f as File & { path?: string }).path)
-    .filter((p): p is string => !!p)
+  // Electron 39 起 File.path 已移除：经 preload 的 webUtils.getPathForFile 取绝对路径；
+  // 取不到（浏览器环境/程序化 File）直接丢弃
+  const paths = files.map((f) => window.api.getPathForFile(f)).filter((p): p is string => !!p)
   if (paths.length) emit('select-files', paths)
   input.value = '' // 清空以便重复选择同一文件
   emit('close')

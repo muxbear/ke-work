@@ -48,6 +48,8 @@ export interface AgentAPI {
     size: number
     kind: 'text' | 'image' | 'pdf' | 'unsupported' | 'missing'
   }>>
+  /** 获取文件选择器选中文件的绝对路径（Electron 39 起 File.path 已移除，须走 webUtils） */
+  getPathForFile(file: File): string
 }
 
 export interface AuthAPI {
