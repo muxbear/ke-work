@@ -1980,10 +1980,6 @@ watch(
             </template>
           </div>
         </div>
-        <!-- Toast -->
-        <Transition name="dropdown">
-          <div v-if="toast" class="chat-toast">{{ toast }}</div>
-        </Transition>
         <!-- 消息区滚动定位按钮：接近顶部→回底，接近底部→回顶；中间位置不显示 -->
         <button
           v-if="atTop && !atBottom"
@@ -2318,6 +2314,11 @@ watch(
       </div>
       <ChatSidePanel v-model:fullscreen="panelFullscreen" />
     </div>
+    <!-- Toast（页面级共享：位于 welcome-area / chat-area 两个互斥分支之外，
+         欢迎态与对话态均需渲染——文件校验反馈（不支持类型/文件过大等）两种状态都不可缺失） -->
+    <Transition name="dropdown">
+      <div v-if="toast" class="chat-toast">{{ toast }}</div>
+    </Transition>
   </div>
 </template>
 
