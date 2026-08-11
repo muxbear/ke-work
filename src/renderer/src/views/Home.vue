@@ -367,6 +367,12 @@ const switchNav = (nav: NavKey): void => {
   }
 }
 
+/** 悬浮全名：仅当文本溢出容器被截断时才设置 title（未截断不弹提示） */
+const bindTruncatedTitle = (e: MouseEvent): void => {
+  const el = e.currentTarget as HTMLElement
+  el.title = el.scrollWidth > el.clientWidth ? (el.textContent || '').trim() : ''
+}
+
 /**
  * 菜单弹出方向自适应：菜单打开后测量位置，若超出视口底部则向上弹出（防遮挡）
  * 同一时间仅一个空间/会话菜单在 DOM 中，直接查询统一调整
@@ -620,10 +626,10 @@ const adjustMenuDirection = (): void => {
                   <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
                   <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
                 </svg>
-                <span>
-                  {{ group.ws.name }}
-                  <span v-if="group.ws.id === workspaceStore.currentId" class="space-header-dot"></span>
-                </span>
+                <span class="space-header-name" @mouseenter="bindTruncatedTitle">{{
+                  group.ws.name
+                }}</span>
+                <span v-if="group.ws.id === workspaceStore.currentId" class="space-header-dot"></span>
                 <div class="space-header-right">
                   <div class="space-header-actions">
                     <button
@@ -759,7 +765,9 @@ const adjustMenuDirection = (): void => {
                     @click="openConversation(chat.id)"
                   >
                     <div class="space-chat-main">
-                      <p class="space-chat-title">{{ chat.title }}</p>
+                      <p class="space-chat-title" @mouseenter="bindTruncatedTitle">
+                        {{ chat.title }}
+                      </p>
                     </div>
                     <div class="space-chat-actions">
                       <div class="chat-menu-wrapper">
@@ -1234,7 +1242,7 @@ const adjustMenuDirection = (): void => {
    Sidebar — Expanded
    ═══════════════════════════════════════════════════════════════════════════ */
 .sidebar--expanded {
-  width: 232px;
+  width: 256px;
   background: #f7f9fb;
   border-right: 1px solid rgba(8, 145, 178, 0.1);
   display: flex;
@@ -1496,12 +1504,18 @@ const adjustMenuDirection = (): void => {
   vertical-align: middle;
   border-radius: 50%;
   background: #ef4444;
+  flex-shrink: 0;
 }
 
-.space-header span {
+/* 工作空间名：单行显示，超长省略（悬浮 title 全名见 bindTruncatedTitle） */
+.space-header-name {
   flex: 1;
+  min-width: 0;
   color: #374151;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .space-header svg {
@@ -2358,7 +2372,7 @@ const adjustMenuDirection = (): void => {
    ═══════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 1024px) {
   .sidebar--expanded {
-    width: 200px;
+    width: 224px;
   }
 }
 

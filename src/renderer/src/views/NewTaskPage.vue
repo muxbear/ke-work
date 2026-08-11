@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import QRCode from 'qrcode'
 import { useAgentStore } from '@store/agent'
 import { useWorkspaceStore } from '@store/workspace'
@@ -772,8 +772,8 @@ const FILE_MAX_PDF_BYTES = 20 * 1024 * 1024
 const FILE_MAX_IMAGE_BYTES = 10 * 1024 * 1024
 const FILE_MAX_COUNT = 10
 
-/** 内置模型（走默认 agent 配置；自定义模型经 modelStore 追加） */
-const BUILTIN_MODELS = ['Auto', 'Qing-Pro', 'Qing-Fast', 'Qing-Research']
+/** 内置模型（仅 Auto 走默认 agent 配置；Qing 系列等模型已迁至 models.json，经 modelStore 追加展示） */
+const BUILTIN_MODELS = ['Auto']
 
 /** 当前选中的自定义模型 id（发送/重新生成时随 customModelId 传主进程；内置模型为 null） */
 const selectedCustomId = ref<string | null>(null)
@@ -790,6 +790,40 @@ const selectModel = (opt: { name: string; id?: string }): void => {
   selectedCustomId.value = opt.id ?? null
   modelOpen.value = false
 }
+
+/** hover 菜单控制器：按钮移入打开，移出延迟关闭（给鼠标移入菜单留时间），菜单移入取消延迟、移出立即关闭 */
+interface HoverMenu {
+  open: () => void
+  scheduleClose: () => void
+  cancelClose: () => void
+  closeNow: () => void
+}
+
+const createHoverMenu = (flag: Ref<boolean>): HoverMenu => {
+  let closeTimer: ReturnType<typeof setTimeout> | null = null
+  const open = (): void => {
+    if (closeTimer) clearTimeout(closeTimer)
+    flag.value = true
+  }
+  const scheduleClose = (): void => {
+    if (closeTimer) clearTimeout(closeTimer)
+    closeTimer = setTimeout(() => {
+      flag.value = false
+    }, 200)
+  }
+  const cancelClose = (): void => {
+    if (closeTimer) clearTimeout(closeTimer)
+  }
+  const closeNow = (): void => {
+    if (closeTimer) clearTimeout(closeTimer)
+    flag.value = false
+  }
+  return { open, scheduleClose, cancelClose, closeNow }
+}
+
+/** 模型下拉 / 「+」菜单由点击切换改为 hover 开关 */
+const modelMenuHover = createHoverMenu(modelOpen)
+const plusMenuHover = createHoverMenu(showInputPlusMenu)
 
 const scrollChips = (dir: 'left' | 'right'): void => {
   const el = chipsScrollRef.value
@@ -1190,7 +1224,8 @@ watch(
           <button
             class="toolbar-btn"
             data-plus-menu-trigger
-            @click="showInputPlusMenu = !showInputPlusMenu"
+            @mouseenter="plusMenuHover.open"
+            @mouseleave="plusMenuHover.scheduleClose"
           >
             <svg
               width="16"
@@ -1234,7 +1269,11 @@ watch(
           <div class="toolbar-spacer"></div>
           <!-- Model selector -->
           <div class="model-selector">
-            <button class="model-btn" @click="modelOpen = !modelOpen">
+            <button
+              class="model-btn"
+              @mouseenter="modelMenuHover.open"
+              @mouseleave="modelMenuHover.scheduleClose"
+            >
               <svg
                 width="11"
                 height="11"
@@ -1258,7 +1297,12 @@ watch(
               </svg>
             </button>
             <Transition name="dropdown">
-              <div v-if="modelOpen" class="model-dropdown">
+              <div
+                v-if="modelOpen"
+                class="model-dropdown"
+                @mouseenter="modelMenuHover.cancelClose"
+                @mouseleave="modelMenuHover.closeNow"
+              >
                 <template
                   v-for="group in modelGroups"
                   :key="group.name"
@@ -1336,6 +1380,8 @@ watch(
           <Transition name="plus-menu-slide">
             <PlusMenu
               v-if="showInputPlusMenu"
+              @mouseenter="plusMenuHover.cancelClose"
+              @mouseleave="plusMenuHover.closeNow"
               @select-skill="onSelectSkillToken"
               @select-files="onSelectFiles"
               @close="showInputPlusMenu = false"
@@ -2194,7 +2240,8 @@ watch(
               <button
                 class="toolbar-btn"
                 data-plus-menu-trigger
-                @click="showInputPlusMenu = !showInputPlusMenu"
+                @mouseenter="plusMenuHover.open"
+                @mouseleave="plusMenuHover.scheduleClose"
               >
                 <svg
                   width="15"
@@ -2275,6 +2322,8 @@ watch(
                 <PlusMenu
                   v-if="showInputPlusMenu"
                   compact
+                  @mouseenter="plusMenuHover.cancelClose"
+                  @mouseleave="plusMenuHover.closeNow"
                   @select-skill="onSelectSkillToken"
                   @select-files="onSelectFiles"
                   @close="showInputPlusMenu = false"

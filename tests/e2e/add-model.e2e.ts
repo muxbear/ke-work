@@ -132,7 +132,9 @@ describe('E2E 添加自定义模型全流程', () => {
     // 进入新建任务页，模型下拉出现「自定义模型」分组 + gpt-4o
     await page.getByText('新建任务').first().click()
     await page.locator('.model-btn').waitFor({ state: 'visible', timeout: 15_000 })
-    await page.locator('.model-btn').click()
+    // 模型下拉已改为 hover 打开：先移开再 hover，保证派发 mousemove 触发 mouseenter
+    await page.mouse.move(5, 5)
+    await page.locator('.model-btn').hover()
     await page.locator('.model-group-label', { hasText: '自定义模型' }).waitFor({
       state: 'visible',
       timeout: 15_000

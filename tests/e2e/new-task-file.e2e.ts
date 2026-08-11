@@ -69,7 +69,7 @@ describe('E2E 文件附件', () => {
     rmSync(dataHome, { recursive: true, force: true })
   })
 
-  /** 打开「+」主菜单并等待菜单可见（若菜单已开先点外部关闭） */
+  /** hover「+」打开主菜单并等待菜单可见（若菜单已开先点外部关闭） */
   async function openPlusMenu(): Promise<void> {
     if (
       await page
@@ -80,7 +80,9 @@ describe('E2E 文件附件', () => {
       await page.mouse.click(5, 5)
       await page.locator('.plus-menu').waitFor({ state: 'hidden', timeout: 5_000 })
     }
-    await page.locator('[data-plus-menu-trigger]').first().click()
+    // 先移开再 hover，保证派发 mousemove 触发 mouseenter（坐标恰好重合时不派发）
+    await page.mouse.move(5, 5)
+    await page.locator('[data-plus-menu-trigger]').first().hover()
     await page.locator('.plus-menu').waitFor({ state: 'visible', timeout: 5_000 })
   }
 

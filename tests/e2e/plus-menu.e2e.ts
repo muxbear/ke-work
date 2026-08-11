@@ -68,7 +68,7 @@ describe('E2E 「+」菜单', () => {
 
   // ── 工具函数 ──
 
-  /** 点击「+」打开主菜单（welcome 态只有一个 + 按钮；若菜单已开先点外部关闭） */
+  /** hover「+」打开主菜单（welcome 态只有一个 + 按钮；若菜单已开先点外部关闭） */
   async function openPlusMenu(): Promise<void> {
     if (
       await page
@@ -79,7 +79,9 @@ describe('E2E 「+」菜单', () => {
       await page.mouse.click(5, 5)
       await page.locator('.plus-menu').waitFor({ state: 'hidden', timeout: 5_000 })
     }
-    await page.locator('[data-plus-menu-trigger]').first().click()
+    // 先移开再 hover，保证派发 mousemove 触发 mouseenter（坐标恰好重合时不派发）
+    await page.mouse.move(5, 5)
+    await page.locator('[data-plus-menu-trigger]').first().hover()
     await page.locator('.plus-menu').waitFor({ state: 'visible', timeout: 5_000 })
   }
 
