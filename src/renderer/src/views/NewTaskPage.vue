@@ -890,6 +890,38 @@ const openCreateModal = (): void => {
   showCreateModal.value = true
 }
 
+// ── 权限菜单：默认权限 / 允许完全访问（渲染层本地状态，localStorage 持久化） ──
+const FULL_ACCESS_KEY = 'ke-work.full-access'
+const fullAccess = ref(localStorage.getItem(FULL_ACCESS_KEY) === '1')
+const permMenuOpen = ref(false)
+const showPermConfirm = ref(false)
+const riskChecked = ref(false)
+
+watch(fullAccess, (v) => {
+  localStorage.setItem(FULL_ACCESS_KEY, v ? '1' : '0')
+})
+
+/** 点击开关：关闭→开启需经风险确认弹窗；开启→关闭直接切换 */
+const onPermSwitchClick = (): void => {
+  if (fullAccess.value) {
+    fullAccess.value = false
+  } else {
+    riskChecked.value = false
+    showPermConfirm.value = true
+  }
+}
+
+/** 确认开启：勾选「我已了解风险」后按钮才可点（disabled 由模板控制） */
+const confirmFullAccess = (): void => {
+  fullAccess.value = true
+  showPermConfirm.value = false
+}
+
+/** 取消：关闭弹窗，开关保持关闭 */
+const cancelFullAccess = (): void => {
+  showPermConfirm.value = false
+}
+
 /** 确认创建：主进程 sanitize 是权威校验，错误经 createError 展示 */
 const confirmCreate = async (): Promise<void> => {
   const name = createName.value.trim()
@@ -918,6 +950,9 @@ const handleDocumentClick = (e: MouseEvent): void => {
   }
   if (!target.closest('[data-history-menu-trigger]') && !target.closest('.history-menu')) {
     historyMenuOpen.value = false
+  }
+  if (!target.closest('[data-perm-menu-trigger]') && !target.closest('.perm-menu')) {
+    permMenuOpen.value = false
   }
 }
 
@@ -1541,32 +1576,115 @@ watch(
               </div>
             </Transition>
           </div>
-          <button class="footer-action">
-            <svg
-              width="11"
-              height="11"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
+          <div class="perm-selector">
+            <button
+              class="footer-action"
+              data-perm-menu-trigger
+              @click="permMenuOpen = !permMenuOpen"
             >
-              <rect x="3" y="11" width="18" height="11" rx="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-            默认权限
-            <svg
-              width="9"
-              height="9"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="3" y="11" width="18" height="11" rx="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              默认权限
+              <svg
+                width="9"
+                height="9"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+            <Transition name="plus-menu-slide">
+              <div v-if="permMenuOpen" class="perm-menu" @click.stop>
+                <p class="perm-desc">
+                  当前为默认权限，所有操作都会在安全沙箱约束内进行，超出范围会请求你的允许。
+                </p>
+                <div class="perm-row">
+                  <span class="perm-row-label">允许完全访问</span>
+                  <button
+                    class="perm-switch"
+                    :class="{ 'perm-switch--on': fullAccess }"
+                    type="button"
+                    role="switch"
+                    :aria-checked="fullAccess"
+                    :title="'开启后将减少确认步骤，允许 AI 直接执行更多操作。可能涉及敏感操作、文件修改或外部执行'"
+                    @click="onPermSwitchClick"
+                  >
+                    <span class="perm-switch-knob"></span>
+                  </button>
+                </div>
+              </div>
+            </Transition>
+          </div>
         </div>
       </div>
+
+      <!-- 允许完全访问风险确认 Modal（开关置开前的强制确认：勾选风险须知后才可继续） -->
+      <Transition name="modal">
+        <div v-if="showPermConfirm" class="perm-mask" @click.self="cancelFullAccess">
+          <div class="perm-confirm-card">
+            <div class="perm-confirm-header">
+              <span>开启允许完全访问</span>
+              <button
+                class="perm-confirm-close"
+                type="button"
+                aria-label="关闭"
+                @click="cancelFullAccess"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div class="perm-confirm-body">
+              <p class="perm-confirm-message">
+                开启允许完全访问后，AI 将减少确认步骤，并可直接执行更多操作，包括敏感操作、文件修改或外部执行。仅建议在您信任当前任务时使用。
+              </p>
+              <label class="perm-risk">
+                <input v-model="riskChecked" type="checkbox" class="perm-risk-checkbox" />
+                <span>我已了解风险，并愿意继续</span>
+              </label>
+            </div>
+            <div class="perm-confirm-footer">
+              <button
+                class="perm-confirm-btn perm-confirm-btn--cancel"
+                type="button"
+                @click="cancelFullAccess"
+              >
+                取消
+              </button>
+              <button
+                class="perm-confirm-btn perm-confirm-btn--confirm"
+                type="button"
+                :disabled="!riskChecked"
+                @click="confirmFullAccess"
+              >
+                允许完全访问
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
 
       <!-- 新建工作空间 Modal -->
       <Transition name="modal">
@@ -2957,6 +3075,202 @@ watch(
 }
 
 /* Workspace selector */
+/* ═══════════════════════════════════════════════════════════════════════════
+   权限菜单（默认权限 / 允许完全访问）
+   ═══════════════════════════════════════════════════════════════════════════ */
+.perm-selector {
+  position: relative;
+}
+
+.perm-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  width: 300px;
+  padding: 12px 14px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow:
+    0 -2px 16px rgba(0, 0, 0, 0.1),
+    0 4px 20px rgba(0, 0, 0, 0.08);
+  z-index: 100;
+}
+
+.perm-desc {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #6b7f95;
+}
+
+.perm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.perm-row-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a2332;
+}
+
+/* 开关（与 PlusMenu 模式开关同视觉） */
+.perm-switch {
+  position: relative;
+  width: 30px;
+  height: 17px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: #e2e8f0;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.perm-switch--on {
+  background: linear-gradient(135deg, #0891b2, #0e7490);
+}
+
+.perm-switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 0.15s ease;
+}
+
+.perm-switch--on .perm-switch-knob {
+  transform: translateX(13px);
+}
+
+/* 风险确认弹窗（参照 rename-card 范式） */
+.perm-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.perm-confirm-card {
+  width: 420px;
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2);
+  overflow: hidden;
+}
+
+.perm-confirm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a2332;
+}
+
+.perm-confirm-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.perm-confirm-close:hover {
+  background: #f3f4f6;
+}
+
+.perm-confirm-body {
+  padding: 0 20px 12px;
+}
+
+.perm-confirm-message {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #4b5563;
+}
+
+.perm-risk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  font-size: 12px;
+  color: #374151;
+}
+
+.perm-risk-checkbox {
+  accent-color: #0891b2;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.perm-confirm-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 20px 16px;
+}
+
+.perm-confirm-btn {
+  padding: 8px 18px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    opacity 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.perm-confirm-btn--cancel {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.perm-confirm-btn--cancel:hover {
+  background: #e5e7eb;
+}
+
+.perm-confirm-btn--confirm {
+  background: linear-gradient(135deg, #0891b2, #0e7490);
+  color: #ffffff;
+}
+
+.perm-confirm-btn--confirm:hover {
+  opacity: 0.9;
+}
+
+.perm-confirm-btn--confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .workspace-selector {
   position: relative;
 }
